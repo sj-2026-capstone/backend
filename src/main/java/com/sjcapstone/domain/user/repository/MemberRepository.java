@@ -1,6 +1,6 @@
-package com.sjcapstone.domain.member.repository;
+package com.sjcapstone.domain.user.repository;
 
-import com.sjcapstone.domain.member.entity.Member;
+import com.sjcapstone.domain.user.entity.Member;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

@@ -1,4 +1,4 @@
-package com.sjcapstone.domain.member.entity;
+package com.sjcapstone.domain.user.entity;
 
 import com.sjcapstone.global.entity.BaseEntity;
 import jakarta.persistence.*;
