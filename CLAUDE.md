@@ -379,9 +379,9 @@ jwt.expiration=86400000   # 24시간 (ms)
 | user (CRUD, 예외 연결) | 완료 |
 | shift — entity, 예외, Repository, DTO, Service, Controller | 완료 |
 | auth — register(User+Auth 동시생성), login, JWT, Security | 완료 |
+| notification — entity, SSE 구독, 알림 목록 조회, 읽음 처리 | 완료 |
 | line | 예정 |
 | inspection | 예정 |
-| notification | 예정 |
 | dashboard | 예정 |
 | analysis | 예정 |
 | internal (frame 수집, AI 콜백) | 예정 |

@@ -20,7 +20,10 @@ public enum ErrorCode {
     // Auth
     INVALID_PASSWORD(HttpStatus.BAD_REQUEST, "비밀번호가 올바르지 않습니다."),
     AUTH_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 인증 정보가 존재합니다."),
-    UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "인증이 필요합니다.");
+    UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "인증이 필요합니다."),
+
+    // Notification
+    NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 알림입니다.");
 
     private final HttpStatus status;
     private final String message;
