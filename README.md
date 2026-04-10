@@ -31,4 +31,4 @@
 - `user` : 사용자 관련 기능
 - `inspection` : 검사 이력 관련 기능
 - `notification` : SSE 알림 기능
-- `common` : 공통 응답, 예외 처리, 유틸
+- `global` : 공통 응답, 예외 처리, 유틸
