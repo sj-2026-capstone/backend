@@ -23,16 +23,29 @@ public class Auth extends BaseEntity {
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     private User user;
 
-    @Column(nullable = false, unique = true, length = 100)
-    private String email;
+    @Column(name = "login_id", nullable = false, unique = true, length = 50)
+    private String loginId;
 
     @Column(nullable = false)
     private String password;
 
+    @Column(nullable = false)
+    private boolean passwordChangeRequired;
+
     @Builder
-    public Auth(User user, String email, String password) {
+    public Auth(User user, String loginId, String password, boolean passwordChangeRequired) {
         this.user = user;
-        this.email = email;
+        this.loginId = loginId;
         this.password = password;
+        this.passwordChangeRequired = passwordChangeRequired;
+    }
+
+    public void changePassword(String password) {
+        this.password = password;
+        this.passwordChangeRequired = false;
+    }
+
+    public void updateLoginId(String loginId) {
+        this.loginId = loginId;
     }
 }

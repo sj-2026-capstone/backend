@@ -1,5 +1,6 @@
 package com.sjcapstone.domain.user.entity;
 
+import com.sjcapstone.domain.line.entity.Line;
 import com.sjcapstone.domain.shift.entity.Shift;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -28,7 +29,7 @@ public class User {
     @Column(name = "employee_Id", nullable = false, unique = true, length = 50)
     private UUID employeeId;
 
-    @Column(nullable = false, unique = true, length = 100)
+    @Column(unique = true, length = 100)
     private String email;
 
     @Column(length = 20)
@@ -41,6 +42,10 @@ public class User {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "shift_id")
     private Shift shift;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "line_id")
+    private Line line;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
@@ -62,6 +67,7 @@ public class User {
                 String phone,
                 UserRole role,
                 Shift shift,
+                Line line,
                 UserStatus status) {
         this.userName = userName;
         this.employeeId = employeeId;
@@ -69,6 +75,7 @@ public class User {
         this.phone = phone;
         this.role = role;
         this.shift = shift;
+        this.line = line;
         this.status = status;
     }
 
@@ -84,14 +91,18 @@ public class User {
     }
 
     public void update(String userName,
+                       String email,
                        String phone,
                        UserRole role,
                        Shift shift,
+                       Line line,
                        UserStatus status) {
         this.userName = userName;
+        this.email = email;
         this.phone = phone;
         this.role = role;
         this.shift = shift;
+        this.line = line;
         this.status = status;
     }
 

@@ -1,6 +1,5 @@
 package com.sjcapstone.domain.user.controller;
 
-import com.sjcapstone.domain.user.dto.UserCreateRequest;
 import com.sjcapstone.domain.user.dto.UserListResponse;
 import com.sjcapstone.domain.user.dto.UserResponse;
 import com.sjcapstone.domain.user.dto.UserUpdateRequest;
@@ -8,7 +7,6 @@ import com.sjcapstone.domain.user.service.UserService;
 import com.sjcapstone.global.response.CommonResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,12 +18,6 @@ import java.util.List;
 public class UserController {
 
     private final UserService userService;
-
-    @PostMapping
-    public ResponseEntity<CommonResponse<UserResponse>> createUser(@Valid @RequestBody UserCreateRequest request) {
-        UserResponse response = userService.createUser(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(CommonResponse.ok("사용자가 생성되었습니다.", response));
-    }
 
     @GetMapping("/{userId}")
     public ResponseEntity<CommonResponse<UserResponse>> getUser(@PathVariable Long userId) {
