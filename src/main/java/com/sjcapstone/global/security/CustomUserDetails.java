@@ -28,7 +28,7 @@ public class CustomUserDetails implements UserDetails {
 
     @Override
     public String getUsername() {
-        return auth.getEmail();
+        return auth.getLoginId();
     }
 
     public Long getUserId() {

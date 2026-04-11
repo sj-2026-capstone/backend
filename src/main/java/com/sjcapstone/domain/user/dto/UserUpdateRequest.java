@@ -22,8 +22,9 @@ public class UserUpdateRequest {
     @NotNull(message = "역할은 필수입니다.")
     private UserRole role;
 
-    @NotNull(message = "교대조 ID는 필수입니다.")
     private Long shiftId;
+
+    private Long lineId;
 
     @NotNull(message = "상태는 필수입니다.")
     private UserStatus status;

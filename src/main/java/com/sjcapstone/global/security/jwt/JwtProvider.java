@@ -24,10 +24,10 @@ public class JwtProvider {
         this.expiration = expiration;
     }
 
-    public String createToken(Long userId, String email, UserRole role) {
+    public String createToken(Long userId, String loginId, UserRole role) {
         return Jwts.builder()
                 .subject(String.valueOf(userId))
-                .claim("email", email)
+                .claim("loginId", loginId)
                 .claim("role", role.name())
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + expiration))
@@ -44,8 +44,8 @@ public class JwtProvider {
         }
     }
 
-    public String getEmail(String token) {
-        return parseClaims(token).get("email", String.class);
+    public String getLoginId(String token) {
+        return parseClaims(token).get("loginId", String.class);
     }
 
     private Claims parseClaims(String token) {
