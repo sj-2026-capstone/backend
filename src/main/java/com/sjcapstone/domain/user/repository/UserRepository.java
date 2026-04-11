@@ -2,6 +2,7 @@ package com.sjcapstone.domain.user.repository;
 
 
 import com.sjcapstone.domain.user.entity.User;
+import com.sjcapstone.domain.user.entity.UserRole;
 import com.sjcapstone.domain.user.entity.UserStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -26,6 +27,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByEmployeeIdAndDeletedAtIsNull(UUID employeeId);
 
     List<User> findAllByDeletedAtIsNull();
+
+    List<User> findAllByRoleAndDeletedAtIsNull(UserRole role);
 
     List<User> findAllByStatusAndDeletedAtIsNull(UserStatus status);
 

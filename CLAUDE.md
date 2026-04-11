@@ -18,7 +18,7 @@
 | Validation | Spring Boot Starter Validation |
 | Build | Gradle |
 | API 문서 | Swagger (OpenAPI) — 예정 |
-| 알림 | SSE (Server-Sent Events) — 예정 |
+| 알림 | SSE (Server-Sent Events) — 완료 |
 | Cache | Redis — 예정 |
 | CI/CD | GitHub Actions / Jenkins — 예정 |
 
@@ -92,13 +92,19 @@
 
 ### 4. 알림 (Notification)
 
-| 기능 | 주체 |
-|---|---|
-| 관리자 알림 목록 조회 | ADMIN |
-| 알림 읽음 처리 | ADMIN |
-| SSE 실시간 알림 구독 | ADMIN |
+| 기능 | 주체 | 엔드포인트 |
+|---|---|---|
+| SSE 실시간 알림 구독 | ADMIN | `GET /api/notifications/subscribe` |
+| 알림 목록 조회 (필터/페이징) | ADMIN | `GET /api/notifications?read=&page=&size=` |
+| 미확인 알림 개수 조회 | ADMIN | `GET /api/notifications/unread-count` |
+| 단건 읽음 처리 | ADMIN | `PATCH /api/notifications/{notificationId}/read` |
+| 전체 읽음 처리 | ADMIN | `PATCH /api/notifications/read-all` |
 
-> 알림의 트리거 주체는 **검사 도메인** (불량 확정 시 발생). 알림은 수신/관리만 담당.
+> - 알림의 트리거 주체는 **검사 도메인** (불량 확정 시 발생). 알림은 수신/관리만 담당.
+> - `read` 쿼리 파라미터: 없으면 전체, `false`면 미확인, `true`면 확인완료
+> - SSE 이벤트 이름: 최초 연결 시 `connected`, 새 알림 수신 시 `notification`
+> - inspection 도메인에서 `NotificationService.sendDefectDetected(lineName, defectType, handlerName)` 호출로 ADMIN 전체 발송
+> - `NotificationType`: `DEFECT_DETECTED` / `SYSTEM`
 
 ### 5. 대시보드 / 통계 (Dashboard)
 
@@ -214,7 +220,24 @@ src/main/java/com/sjcapstone/
 │   │   └── exception/
 │   │       └── LineNotFoundException.java
 │   ├── inspection/            # 검사 생성, 상태 머신, 결과 저장 (예정)
-│   ├── notification/          # 알림 생성, SSE 구독, 읽음 처리 (완료)
+│   ├── notification/          # 알림 생성, SSE 구독, 필터/페이징 조회, 읽음 처리 (완료)
+│   │   ├── controller/
+│   │   │   └── NotificationController.java
+│   │   ├── service/
+│   │   │   ├── NotificationService.java
+│   │   │   └── NotificationServiceImpl.java
+│   │   ├── repository/
+│   │   │   ├── NotificationRepository.java
+│   │   │   └── SseEmitterRepository.java
+│   │   ├── entity/
+│   │   │   ├── Notification.java
+│   │   │   └── NotificationType.java  (enum: DEFECT_DETECTED/SYSTEM)
+│   │   ├── dto/
+│   │   │   ├── NotificationResponse.java
+│   │   │   ├── NotificationPageResponse.java
+│   │   │   └── UnreadCountResponse.java
+│   │   └── exception/
+│   │       └── NotificationNotFoundException.java
 │   ├── dashboard/             # 통계 집계 API — 읽기 전용 (예정)
 │   └── analysis/              # AI 공정 개선 분석 요청/결과 관리 (예정)
 ├── internal/                  # 내부 시스템 전용 API (별도 보안 채널)
@@ -258,7 +281,11 @@ src/main/java/com/sjcapstone/
 /api/shifts/**             → 교대조 (JWT 필요)
 /api/lines/**              → 생산라인 (JWT 필요)
 /api/inspections/**        → 검사 (JWT 필요)
-/api/notifications/**      → 알림 (JWT 필요)
+/api/notifications/subscribe          → SSE 구독 (ADMIN, JWT 필요)
+/api/notifications                    → 알림 목록 조회 (ADMIN, ?read=&page=&size=)
+/api/notifications/unread-count       → 미확인 개수 조회 (ADMIN)
+/api/notifications/{id}/read          → 단건 읽음 처리 (ADMIN)
+/api/notifications/read-all           → 전체 읽음 처리 (ADMIN)
 /api/dashboard/**          → 대시보드 통계 (ADMIN 전용)
 /api/analysis/**           → 공정 개선 분석 (ADMIN 전용)
 
@@ -279,6 +306,7 @@ src/main/java/com/sjcapstone/
 - 사번(`employeeId`)은 UUID 타입, 서버에서 자동 생성
 - `email`은 nullable — 선택 입력 (loginId가 주 식별자)
 - **비밀번호 없음** — 인증 정보는 Auth 도메인에서 완전 분리 관리
+- `UserRepository.findAllByRoleAndDeletedAtIsNull(UserRole)` — notification 도메인에서 ADMIN 전체 발송 시 사용
 
 ### Auth (인증)
 - `user`와 완전 분리: `auth` 테이블에 `user_id`(FK), `login_id`, `password`, `passwordChangeRequired` 보관
@@ -315,9 +343,27 @@ src/main/java/com/sjcapstone/
 - 불량 확정 시 `notification` 도메인으로 알림 트리거
 
 ### Notification (알림)
-- 불량 발생 시 ADMIN 대상 알림 생성
-- SSE 기반 실시간 push
-- 읽음 처리
+- 불량 발생 시 ADMIN 대상 알림 생성 (soft delete된 사용자 제외)
+- SSE 기반 실시간 push (`connected` / `notification` 이벤트)
+- 알림 목록 조회: `isRead` 필터(전체/미확인/확인완료) + 페이징 (`NotificationPageResponse`)
+- 미확인 알림 개수 조회 (`UnreadCountResponse`)
+- 단건 읽음 처리 / 전체 읽음 처리 (bulk update)
+- **inspection 도메인 연동 진입점**:
+  - `sendToAdmins(type, title, message)` — 모든 ADMIN에게 직접 발송
+  - `sendDefectDetected(lineName, defectType, handlerName)` — 불량 감지 convenience 메서드 (`handlerName` nullable)
+  - inspection 엔티티에 직접 의존하지 않음; 파라미터는 primitive/String 기반
+- `NotificationType`: `DEFECT_DETECTED` / `SYSTEM`
+- 알림 응답 예시:
+  ```json
+  {
+    "notificationId": 10,
+    "notificationType": "DEFECT_DETECTED",
+    "title": "불량 부품 감지",
+    "message": "A라인 - 도어 스크래치 | 담당자: 김관리",
+    "isRead": false,
+    "createdAt": "2026-04-11T14:32:05"
+  }
+  ```
 
 ### Dashboard (대시보드/통계) — 예정
 - 별도 엔티티 없이 검사 데이터 집계 쿼리 기반
@@ -452,7 +498,7 @@ jwt.expiration=86400000   # 24시간 (ms)
 | user — CRUD, 예외 연결 | 완료 |
 | shift — entity, 예외, Repository, DTO, Service, Controller | 완료 |
 | line — entity, Repository, DTO, Service, Controller, seed 초기화 | 완료 |
-| notification — entity, SSE 구독, 알림 목록 조회, 읽음 처리 | 완료 |
+| notification — entity, SSE 구독, 필터/페이징 목록 조회, 미확인 개수, 단건/전체 읽음 처리, ADMIN 전체 발송, 불량 감지 helper | 완료 |
 | inspection | 예정 |
 | dashboard | 예정 |
 | analysis | 예정 |
@@ -470,7 +516,7 @@ jwt.expiration=86400000   # 24시간 (ms)
 | AI 분석 서버 연동 방식 | 동기 HTTP 호출 vs 비동기 메시지 큐 (향후 확장성) |
 | dashboard 데이터 정합성 | 실시간 집계 쿼리 vs 별도 집계 테이블 캐싱 여부 |
 | inspection과 frame의 관계 | 프레임을 inspection 하위로 볼지, 독립 엔티티로 볼지 |
-| SSE 알림 대상 범위 | 전체 ADMIN / 특정 라인 담당자만 |
+| SSE 알림 대상 범위 | 현재 전체 ADMIN 대상으로 구현 완료. 특정 라인 담당자 한정 발송이 필요한 경우 추가 구현 필요 |
 | Redis 도입 시기 | refresh token 저장 용도 |
 | Swagger 설정 추가 시점 | |
 | `user` 도메인 직접 접근 API 정리 | `PUT /api/users/{id}` 가 admin 기능과 중복될 수 있으므로 역할 명확화 필요 |
