@@ -263,7 +263,9 @@ src/main/java/com/sjcapstone/
         ├── jwt/
         │   ├── JwtProvider.java
         │   └── JwtAuthenticationFilter.java
-        └── internal/              # 내부 시스템 키 검증 (예정)
+        └── internal/
+            ├── InternalApiKeyFilter.java      # X-Service-Key 헤더 검증 필터
+            └── InternalApiKeyProperties.java  # application.properties 바인딩
 ```
 
 ---
@@ -384,10 +386,13 @@ src/main/java/com/sjcapstone/
 | URL prefix | `/api/` | `/internal/` |
 | Security Filter Chain | 사용자 JWT Filter | 내부 키 검증 Filter |
 
-### SecurityConfig 공개 엔드포인트
-- `POST /api/auth/login` — 인증 없이 접근 허용 (로그인만 공개, `/api/auth/**` 전체 공개 아님)
-- `/api/admin/**` — `ADMIN` 권한 필요 (`hasRole("ADMIN")`)
-- 나머지 모든 엔드포인트 — JWT 필요
+### SecurityConfig Filter Chain 구성
+- `@Order(1)` — `/internal/**` 전용 체인: `InternalApiKeyFilter`로 `X-Service-Key` 헤더 검증, 불일치 시 즉시 401 반환
+- `@Order(2)` — `/api/**` 체인: JWT 검증
+  - `POST /api/auth/login` — 인증 없이 접근 허용 (로그인만 공개, `/api/auth/**` 전체 공개 아님)
+  - `/api/admin/**` — `ADMIN` 권한 필요 (`hasRole("ADMIN")`)
+  - 나머지 모든 엔드포인트 — JWT 필요
+- `FilterRegistrationBean.setEnabled(false)` — 두 필터 모두 서블릿 컨테이너에 이중 등록 방지
 
 ---
 
@@ -476,6 +481,9 @@ spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
 # JWT
 jwt.secret=<Base64 인코딩된 시크릿 키 — 운영 환경에서는 반드시 교체>
 jwt.expiration=86400000   # 24시간 (ms)
+
+# Internal API Key
+internal.service-key=<내부 시스템 공유 키 — 운영 환경에서는 반드시 교체>
 ```
 
 ### JPA Auditing
@@ -493,6 +501,7 @@ jwt.expiration=86400000   # 24시간 (ms)
 | 도메인 | 상태 |
 |---|---|
 | global (예외, 응답, 보안 기반) | 완료 |
+| global/security/internal — X-Service-Key 검증 필터, SecurityConfig 이중 체인 | 완료 |
 | auth — loginId 기반 로그인, 내 정보 조회, 비밀번호 변경, JWT | 완료 |
 | admin — 계정 생성/수정/상태변경/목록/상세/요약/loginId 중복확인 | 완료 |
 | user — CRUD, 예외 연결 | 완료 |
@@ -502,7 +511,7 @@ jwt.expiration=86400000   # 24시간 (ms)
 | inspection | 예정 |
 | dashboard | 예정 |
 | analysis | 예정 |
-| internal (frame 수집, AI 콜백) | 예정 |
+| internal (frame 수집, AI 콜백) | 예정 (보안 인프라는 완료) |
 
 ---
 
@@ -511,7 +520,7 @@ jwt.expiration=86400000   # 24시간 (ms)
 | 항목 | 내용 |
 |---|---|
 | PENDING 유저 API 접근 제한 | 승인 전 `/api/users/**`, `/api/shifts/**` 등 접근 차단 여부 결정 필요 |
-| 내부 시스템 인증 방식 | API Key 정적 관리 vs 서비스 토큰 발급 방식 결정 필요 |
+| 내부 시스템 인증 방식 | `X-Service-Key` 정적 API Key로 결정 및 구현 완료 (`InternalApiKeyFilter`) |
 | 검사 상태 머신 정의 | `PENDING → PROCESSING → DONE/FAILED` 전환 규칙 명확화 |
 | AI 분석 서버 연동 방식 | 동기 HTTP 호출 vs 비동기 메시지 큐 (향후 확장성) |
 | dashboard 데이터 정합성 | 실시간 집계 쿼리 vs 별도 집계 테이블 캐싱 여부 |
