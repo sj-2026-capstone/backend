@@ -78,17 +78,21 @@
 
 ### 3. 검사 (Inspection)
 
-| 기능 | 주체 |
-|---|---|
-| 검사 생성 | 내부 시스템 or ADMIN |
-| 검사 프레임 업로드 | 카메라/엣지 디바이스 (내부 API) |
-| 검사 분석 시작 | 시스템 자동 or ADMIN |
-| 검사 이력 목록 조회 | WORKER, ADMIN (권한별 범위 다름) |
-| 검사 상세 조회 | WORKER, ADMIN |
-| 검사 상태 조회 | WORKER, ADMIN |
-| 분석 완료 콜백 수신 | AI 분석 서버 (내부 API) |
+| 기능 | 주체 | 엔드포인트 |
+|---|---|---|
+| 검사 생성 | ADMIN | `POST /api/inspections` |
+| 검사 이력 목록 조회 (필터/페이징) | WORKER, ADMIN | `GET /api/inspections?lineId=&status=&page=&size=` |
+| 검사 상세 조회 | WORKER, ADMIN | `GET /api/inspections/{inspectionId}` |
+| 검사 상태 조회 | WORKER, ADMIN | `GET /api/inspections/{inspectionId}/status` |
+| 검사 분석 시작 | ADMIN | `POST /api/inspections/{inspectionId}/analyze` |
+| 프레임 수집 (검사 생성) | 카메라/엣지 디바이스 | `POST /internal/frames` |
+| 분석 완료 콜백 수신 | AI 분석 서버 | `POST /internal/callbacks/{inspectionId}` |
 
-> 검사 도메인은 **상태 머신** 성격: `PENDING → PROCESSING → DONE / FAILED`
+> - 검사 도메인은 **상태 머신** 성격: `PENDING → PROCESSING → DONE / FAILED`
+> - `WORKER`는 자신이 배정된 라인의 검사만 조회 가능 (다른 라인 접근 시 404)
+> - `ADMIN`은 전체 조회 가능, `lineId` / `status` 필터 지원
+> - 콜백 수신 시 `hasDefect=true`이면 `NotificationService.sendDefectDetected()` 자동 호출 → ADMIN 전체 알림 발송
+> - `DefectType`: `SCRATCH` / `DENT` / `CRACK` / `CONTAMINATION` / `MISSING_PART` / `DIMENSION_ERROR`
 
 ### 4. 알림 (Notification)
 
@@ -263,9 +267,7 @@ src/main/java/com/sjcapstone/
         ├── jwt/
         │   ├── JwtProvider.java
         │   └── JwtAuthenticationFilter.java
-        └── internal/
-            ├── InternalApiKeyFilter.java      # X-Service-Key 헤더 검증 필터
-            └── InternalApiKeyProperties.java  # application.properties 바인딩
+        └── internal/              # 내부 시스템 키 검증 (예정)
 ```
 
 ---
@@ -386,13 +388,10 @@ src/main/java/com/sjcapstone/
 | URL prefix | `/api/` | `/internal/` |
 | Security Filter Chain | 사용자 JWT Filter | 내부 키 검증 Filter |
 
-### SecurityConfig Filter Chain 구성
-- `@Order(1)` — `/internal/**` 전용 체인: `InternalApiKeyFilter`로 `X-Service-Key` 헤더 검증, 불일치 시 즉시 401 반환
-- `@Order(2)` — `/api/**` 체인: JWT 검증
-  - `POST /api/auth/login` — 인증 없이 접근 허용 (로그인만 공개, `/api/auth/**` 전체 공개 아님)
-  - `/api/admin/**` — `ADMIN` 권한 필요 (`hasRole("ADMIN")`)
-  - 나머지 모든 엔드포인트 — JWT 필요
-- `FilterRegistrationBean.setEnabled(false)` — 두 필터 모두 서블릿 컨테이너에 이중 등록 방지
+### SecurityConfig 공개 엔드포인트
+- `POST /api/auth/login` — 인증 없이 접근 허용 (로그인만 공개, `/api/auth/**` 전체 공개 아님)
+- `/api/admin/**` — `ADMIN` 권한 필요 (`hasRole("ADMIN")`)
+- 나머지 모든 엔드포인트 — JWT 필요
 
 ---
 
@@ -481,9 +480,6 @@ spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
 # JWT
 jwt.secret=<Base64 인코딩된 시크릿 키 — 운영 환경에서는 반드시 교체>
 jwt.expiration=86400000   # 24시간 (ms)
-
-# Internal API Key
-internal.service-key=<내부 시스템 공유 키 — 운영 환경에서는 반드시 교체>
 ```
 
 ### JPA Auditing
@@ -501,7 +497,6 @@ internal.service-key=<내부 시스템 공유 키 — 운영 환경에서는 반
 | 도메인 | 상태 |
 |---|---|
 | global (예외, 응답, 보안 기반) | 완료 |
-| global/security/internal — X-Service-Key 검증 필터, SecurityConfig 이중 체인 | 완료 |
 | auth — loginId 기반 로그인, 내 정보 조회, 비밀번호 변경, JWT | 완료 |
 | admin — 계정 생성/수정/상태변경/목록/상세/요약/loginId 중복확인 | 완료 |
 | user — CRUD, 예외 연결 | 완료 |
@@ -511,7 +506,7 @@ internal.service-key=<내부 시스템 공유 키 — 운영 환경에서는 반
 | inspection | 예정 |
 | dashboard | 예정 |
 | analysis | 예정 |
-| internal (frame 수집, AI 콜백) | 예정 (보안 인프라는 완료) |
+| internal (frame 수집, AI 콜백) | 예정 |
 
 ---
 
@@ -520,7 +515,7 @@ internal.service-key=<내부 시스템 공유 키 — 운영 환경에서는 반
 | 항목 | 내용 |
 |---|---|
 | PENDING 유저 API 접근 제한 | 승인 전 `/api/users/**`, `/api/shifts/**` 등 접근 차단 여부 결정 필요 |
-| 내부 시스템 인증 방식 | `X-Service-Key` 정적 API Key로 결정 및 구현 완료 (`InternalApiKeyFilter`) |
+| 내부 시스템 인증 방식 | API Key 정적 관리 vs 서비스 토큰 발급 방식 결정 필요 |
 | 검사 상태 머신 정의 | `PENDING → PROCESSING → DONE/FAILED` 전환 규칙 명확화 |
 | AI 분석 서버 연동 방식 | 동기 HTTP 호출 vs 비동기 메시지 큐 (향후 확장성) |
 | dashboard 데이터 정합성 | 실시간 집계 쿼리 vs 별도 집계 테이블 캐싱 여부 |

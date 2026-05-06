@@ -30,7 +30,14 @@ public enum ErrorCode {
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "인증이 필요합니다."),
 
     // Notification
-    NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 알림입니다.");
+    NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 알림입니다."),
+
+    // Inspection
+    INSPECTION_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 검사입니다."),
+    INVALID_INSPECTION_STATUS(HttpStatus.BAD_REQUEST, "현재 상태에서 허용되지 않는 작업입니다."),
+
+    // Common
+    FORBIDDEN(HttpStatus.FORBIDDEN, "접근 권한이 없습니다.");
 
     private final HttpStatus status;
     private final String message;

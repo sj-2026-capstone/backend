@@ -1,0 +1,882 @@
+{
+  "info": {
+    "_postman_id": "7a7f0f38-1ce6-4b8a-b80d-aefad7ea1111",
+    "name": "Capstone API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Capstone backend API collection. Import with `postman/capstone-local.postman_environment.json`."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "loginId",
+      "value": "admin01"
+    },
+    {
+      "key": "password",
+      "value": "password123"
+    },
+    {
+      "key": "currentPassword",
+      "value": "password123"
+    },
+    {
+      "key": "newPassword",
+      "value": "newPassword123"
+    },
+    {
+      "key": "adminUserId",
+      "value": "1"
+    },
+    {
+      "key": "workerUserId",
+      "value": "2"
+    },
+    {
+      "key": "shiftId",
+      "value": "1"
+    },
+    {
+      "key": "lineId",
+      "value": "1"
+    },
+    {
+      "key": "inspectionId",
+      "value": "1"
+    },
+    {
+      "key": "notificationId",
+      "value": "1"
+    },
+    {
+      "key": "workDate",
+      "value": "2026-05-04"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  const data = json.data || {};",
+                  "  if (data.accessToken) pm.collectionVariables.set('accessToken', data.accessToken);",
+                  "  if (data.userId) pm.collectionVariables.set('adminUserId', String(data.userId));",
+                  "  if (data.loginId) pm.collectionVariables.set('loginId', data.loginId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loginId\": \"{{loginId}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "로그인 후 `accessToken`이 컬렉션 변수에 자동 저장됩니다."
+          }
+        },
+        {
+          "name": "Get Me",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"{{currentPassword}}\",\n  \"newPassword\": \"{{newPassword}}\",\n  \"confirmPassword\": \"{{newPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "password"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin Accounts",
+      "item": [
+        {
+          "name": "Create Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userName\": \"홍길동\",\n  \"loginId\": \"worker01\",\n  \"password\": \"password123\",\n  \"confirmPassword\": \"password123\",\n  \"role\": \"WORKER\",\n  \"shiftId\": {{shiftId}},\n  \"lineId\": {{lineId}},\n  \"email\": \"worker01@example.com\",\n  \"phone\": \"010-1234-5678\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/accounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "accounts"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Check Login ID Availability",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/accounts/login-id/availability?loginId=worker01",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "accounts",
+                "login-id",
+                "availability"
+              ],
+              "query": [
+                {
+                  "key": "loginId",
+                  "value": "worker01"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Account Summary",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/accounts/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "accounts",
+                "summary"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Accounts",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/accounts?keyword=&status=ACTIVE&page=0&size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "accounts"
+              ],
+              "query": [
+                {
+                  "key": "keyword",
+                  "value": ""
+                },
+                {
+                  "key": "status",
+                  "value": "ACTIVE"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Account Detail",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/accounts/{{workerUserId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "accounts",
+                "{{workerUserId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Account",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userName\": \"홍길동 수정\",\n  \"loginId\": \"worker01\",\n  \"role\": \"WORKER\",\n  \"shiftId\": {{shiftId}},\n  \"lineId\": {{lineId}},\n  \"status\": \"ACTIVE\",\n  \"email\": \"worker01@example.com\",\n  \"phone\": \"010-9999-9999\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/accounts/{{workerUserId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "accounts",
+                "{{workerUserId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Account Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"INACTIVE\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/accounts/{{workerUserId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "accounts",
+                "{{workerUserId}}",
+                "status"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get User",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{workerUserId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{workerUserId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Users",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userName\": \"홍길동 수정\",\n  \"phone\": \"010-1111-2222\",\n  \"role\": \"WORKER\",\n  \"shiftId\": {{shiftId}},\n  \"lineId\": {{lineId}},\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{workerUserId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{workerUserId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{workerUserId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{workerUserId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Lines",
+      "item": [
+        {
+          "name": "Get Lines",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/lines",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lines"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Line",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/lines/{{lineId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lines",
+                "{{lineId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Shifts",
+      "item": [
+        {
+          "name": "Create Shift",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shiftType\": \"DAY\",\n  \"shiftName\": \"주간 1조\",\n  \"startTime\": \"06:00:00\",\n  \"endTime\": \"14:00:00\",\n  \"shiftOrder\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/shifts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shifts"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Shifts",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/shifts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shifts"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Shift",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/shifts/{{shiftId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shifts",
+                "{{shiftId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Shift",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shiftName\": \"주간 1조 수정\",\n  \"startTime\": \"06:00:00\",\n  \"endTime\": \"14:00:00\",\n  \"shiftOrder\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/shifts/{{shiftId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shifts",
+                "{{shiftId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Deactivate Shift",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/api/shifts/{{shiftId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shifts",
+                "{{shiftId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Assign User To Shift",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": {{workerUserId}},\n  \"shiftId\": {{shiftId}},\n  \"workDate\": \"{{workDate}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/shifts/assignments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shifts",
+                "assignments"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Assignments By Date",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/shifts/assignments?date={{workDate}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shifts",
+                "assignments"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "{{workDate}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Assignments By User",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/shifts/assignments/users/{{workerUserId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shifts",
+                "assignments",
+                "users",
+                "{{workerUserId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Subscribe SSE",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/event-stream"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/subscribe",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "subscribe"
+              ]
+            },
+            "description": "Postman에서는 SSE 스트림 확인이 제한적일 수 있습니다."
+          }
+        },
+        {
+          "name": "Get Notifications",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications?read=&page=0&size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "read",
+                  "value": ""
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Unread Count",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/unread-count",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "unread-count"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mark Notification As Read",
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/{{notificationId}}/read",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "{{notificationId}}",
+                "read"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mark All Notifications As Read",
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/read-all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "read-all"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Inspections",
+      "item": [
+        {
+          "name": "Create Inspection",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lineId\": {{lineId}},\n  \"workerId\": {{workerUserId}},\n  \"shiftId\": {{shiftId}},\n  \"imageUrl\": \"https://example.com/test-image.jpg\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/inspections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "inspections"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Inspections",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/inspections?lineId={{lineId}}&status=PENDING&page=0&size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "inspections"
+              ],
+              "query": [
+                {
+                  "key": "lineId",
+                  "value": "{{lineId}}"
+                },
+                {
+                  "key": "status",
+                  "value": "PENDING"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Inspection Detail",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/inspections/{{inspectionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "inspections",
+                "{{inspectionId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Inspection Status",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/inspections/{{inspectionId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "inspections",
+                "{{inspectionId}}",
+                "status"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Start Inspection Analysis",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/inspections/{{inspectionId}}/analyze",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "inspections",
+                "{{inspectionId}}",
+                "analyze"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

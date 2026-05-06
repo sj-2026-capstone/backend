@@ -1,6 +1,6 @@
 # 스마트 공정/현장 관리 플랫폼 — Backend
 
-공장 현장의 사용자 관리, 교대조 운영, 인증, 관리자 알림을 제공하는 백엔드 서버.
+공장 현장의 사용자 관리, 교대조 운영, 인증, 관리자 알림, 생산 라인 조회, 검사 생성/조회/분석 시작을 제공하는 백엔드 서버.
 현재 구현 기준 주요 사용자 역할은 `WORKER`, `ADMIN` 이며, JWT 기반 인증을 사용한다.
 
 ---
@@ -29,7 +29,25 @@
 src/main/java/com/sjcapstone/
 ├── CapstoneApplication.java
 ├── domain/
+│   ├── admin/
+│   │   ├── controller/
+│   │   ├── dto/
+│   │   └── service/
 │   ├── auth/
+│   │   ├── controller/
+│   │   ├── dto/
+│   │   ├── entity/
+│   │   ├── exception/
+│   │   ├── repository/
+│   │   └── service/
+│   ├── inspection/
+│   │   ├── controller/
+│   │   ├── dto/
+│   │   ├── entity/
+│   │   ├── exception/
+│   │   ├── repository/
+│   │   └── service/
+│   ├── line/
 │   │   ├── controller/
 │   │   ├── dto/
 │   │   ├── entity/
@@ -57,16 +75,17 @@ src/main/java/com/sjcapstone/
 │       ├── exception/
 │       ├── repository/
 │       └── service/
-└── global/
-    ├── config/
-    ├── entity/
-    ├── exception/
-    ├── response/
-    └── security/
-        └── jwt/
+├── global/
+│   ├── config/
+│   ├── entity/
+│   ├── exception/
+│   ├── response/
+│   └── security/
+│       └── jwt/
+└── internal/
+    ├── callback/
+    └── frame/
 ```
-
-`inspection` 도메인은 아직 생성되지 않았다.
 
 ---
 
@@ -94,26 +113,59 @@ src/main/java/com/sjcapstone/
 ### Auth
 - `Auth` 엔티티로 로그인 정보를 `User` 와 분리 관리한다.
 - 현재 구현 범위:
-  - 회원가입: `POST /api/auth/register`
   - 로그인: `POST /api/auth/login`
+  - 현재 사용자 조회: `GET /api/auth/me`
+  - 비밀번호 변경: `PATCH /api/auth/password`
+- 공개 회원가입 API는 없다.
 - 로그인 성공 시 JWT access token 을 발급한다.
 - refresh token, 재발급, 로그아웃은 아직 구현되지 않았다.
+
+### Admin Account
+- 관리자 전용 계정 관리 기능이 구현되어 있다.
+- 계정 생성 시 `User` 와 `Auth` 를 함께 저장한다.
+- `WORKER` 계정은 `shiftId`, `lineId` 가 필수이고, `ADMIN` 계정은 nullable 이다.
+- 신규 생성 계정은 `passwordChangeRequired=true` 상태로 저장된다.
+
+### Line
+- 생산 라인 기준정보 조회 기능이 구현되어 있다.
+- 현재 라인 코드는 `A`, `B`, `C` 를 사용한다.
+- 앱 시작 시 `A라인`, `B라인`, `C라인` 이 자동 seed 된다.
 
 ### Notification
 - 관리자용 알림 저장 및 SSE 구독 기능이 구현되어 있다.
 - 현재 구현 범위:
   - SSE 구독: `GET /api/notifications/subscribe`
   - 알림 목록 조회: `GET /api/notifications`
+  - 미확인 알림 개수 조회: `GET /api/notifications/unread-count`
   - 읽음 처리: `PATCH /api/notifications/{notificationId}/read`
+  - 전체 읽음 처리: `PATCH /api/notifications/read-all`
 - 알림 타입은 현재 `DEFECT_DETECTED`, `SYSTEM` 을 사용한다.
 - SSE emitter 저장소는 인메모리 `SseEmitterRepository` 기반이다.
+
+### Inspection
+- 검사 생성/조회/상태 조회/분석 시작 기능이 구현되어 있다.
+- 검사 상태는 `PENDING`, `PROCESSING`, `DONE`, `FAILED` 를 사용한다.
+- `ADMIN` 은 검사 생성과 분석 시작이 가능하다.
+- 목록/상세/상태 조회는 `ADMIN` 전체 조회, `WORKER` 자신 라인 기준 조회로 동작한다.
+
+### Internal
+- 내부 수집/분석 연동용 비공개 API가 존재한다.
+- `/internal/**` 경로는 Spring Security 에서 인증 없이 허용된다.
 
 ---
 
 ## 구현된 API 범위
 
+### Admin Account API
+- `POST /api/admin/accounts`
+- `GET /api/admin/accounts/login-id/availability?loginId=...`
+- `GET /api/admin/accounts/summary`
+- `GET /api/admin/accounts`
+- `GET /api/admin/accounts/{userId}`
+- `PUT /api/admin/accounts/{userId}`
+- `PATCH /api/admin/accounts/{userId}/status`
+
 ### User API
-- `POST /api/users`
 - `GET /api/users/{userId}`
 - `GET /api/users`
 - `PUT /api/users/{userId}`
@@ -130,20 +182,40 @@ src/main/java/com/sjcapstone/
 - `GET /api/shifts/assignments/users/{userId}`
 
 ### Auth API
-- `POST /api/auth/register`
 - `POST /api/auth/login`
+- `GET /api/auth/me`
+- `PATCH /api/auth/password`
+
+### Line API
+- `GET /api/lines`
+- `GET /api/lines/{lineId}`
 
 ### Notification API
 - `GET /api/notifications/subscribe`
 - `GET /api/notifications`
+- `GET /api/notifications/unread-count`
 - `PATCH /api/notifications/{notificationId}/read`
+- `PATCH /api/notifications/read-all`
+
+### Inspection API
+- `POST /api/inspections`
+- `GET /api/inspections`
+- `GET /api/inspections/{inspectionId}`
+- `GET /api/inspections/{inspectionId}/status`
+- `POST /api/inspections/{inspectionId}/analyze`
+
+### Internal API
+- `POST /internal/frames`
+- `POST /internal/callbacks/{inspectionId}`
 
 ---
 
 ## 보안 / 인증
 
 ### SecurityConfig
-- `/api/auth/**` 는 인증 없이 접근 가능하다.
+- `POST /api/auth/login` 은 인증 없이 접근 가능하다.
+- `/internal/**` 는 인증 없이 접근 가능하다.
+- `/api/admin/**` 는 `ADMIN` 권한이 필요하다.
 - 그 외 모든 요청은 인증이 필요하다.
 - 세션은 `STATELESS` 로 설정되어 있다.
 - `JwtAuthenticationFilter` 가 `UsernamePasswordAuthenticationFilter` 앞에서 동작한다.
@@ -152,13 +224,14 @@ src/main/java/com/sjcapstone/
 - `JwtProvider` 가 토큰 생성 및 검증을 담당한다.
 - 현재 토큰 payload:
   - `sub`: userId
-  - `email`
+  - `loginId`
   - `role`
 - `Authorization: Bearer {token}` 헤더를 사용한다.
 
 ### 현재 보안 상태
-- 인증은 동작하지만, 엔드포인트별 역할 분리는 아직 세밀하게 적용되지 않았다.
-- 컨트롤러 주석에는 `ADMIN`, `WORKER` 대상이 구분되어 있지만, 실제 `SecurityConfig` 에 role matcher 는 없다.
+- `/api/admin/**` 에 대한 역할 분리는 `SecurityConfig` 에 적용되어 있다.
+- `inspection` 도메인은 컨트롤러/서비스 레벨에서 추가 역할 검증을 수행한다.
+- `/api/users/**`, `/api/shifts/**`, `/api/lines/**`, `/api/notifications/**`, `/api/inspections/**` 는 기본적으로 JWT 인증이 필요하다.
 
 ---
 
@@ -217,6 +290,10 @@ jwt.expiration=86400000
 - `BaseEntity` 를 상속한 엔티티는 auditing 을 사용한다.
 - 단, `User` 는 현재 `BaseEntity` 를 상속하지 않는다.
 
+### Seed 데이터
+- `LineDataInitializer` 가 `A라인`, `B라인`, `C라인` 을 자동 생성한다.
+- `AdminDataInitializer` 가 `admin01 / password123` 테스트 관리자 계정을 자동 생성한다.
+
 ---
 
 ## 현재 구현 현황
@@ -224,11 +301,14 @@ jwt.expiration=86400000
 | 도메인 | 상태 |
 |---|---|
 | global (예외, 응답, 보안 기반) | 완료 |
+| admin (계정 생성/목록/상세/수정/상태 변경/요약) | 완료 |
 | user (CRUD, soft delete) | 완료 |
+| line (기준정보 조회, 초기 seed) | 완료 |
 | shift (교대조 CRUD, 날짜별 배정) | 완료 |
-| auth (회원가입, 로그인, JWT 발급) | 완료 |
-| notification (저장, 조회, 읽음 처리, SSE 구독) | 완료 |
-| inspection | 미구현 |
+| auth (로그인, 내 정보 조회, 비밀번호 변경, JWT 발급) | 완료 |
+| notification (저장, 조회, 읽음 처리, unread count, SSE 구독) | 완료 |
+| inspection (생성, 목록/상세/상태 조회, 분석 시작) | 완료 |
+| internal (프레임 수집, 분석 콜백) | 완료 |
 | refresh token / logout | 미구현 |
 | Redis | 미도입 |
 | Swagger/OpenAPI | 미구현 |
@@ -240,8 +320,7 @@ jwt.expiration=86400000
 - JWT secret 실제 운영값 분리
 - refresh token 저장 및 재발급 정책
 - 로그아웃 처리 방식
-- `inspection` 도메인 설계 및 `shift` 연계 방식
 - notification 발송 대상 정책
 - SSE 재연결/다중 연결 정책
-- 초기 seed 데이터 삽입 방식
-- 역할 기반 인가(`ADMIN`/`WORKER`) 세분화
+- 초기 seed 데이터 운영/개발 환경 분리
+- 역할 기반 인가(`ADMIN`/`WORKER`) 추가 세분화
