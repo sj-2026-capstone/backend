@@ -112,15 +112,15 @@
 
 ### 5. 대시보드 / 통계 (Dashboard)
 
-| 기능 | 주체 |
-|---|---|
-| 대시보드 요약 조회 | 로그인된 사용자 |
-| 불량률 추이 조회 | 로그인된 사용자 |
-| 불량 유형별 통계 조회 | 로그인된 사용자 |
-| 교대조별 불량 통계 조회 | 로그인된 사용자 |
-| 생산라인별 불량 통계 조회 | 로그인된 사용자 |
+| 기능 | 주체 | 엔드포인트 |
+|---|---|---|
+| 대시보드 통합 조회 | ADMIN | `GET /api/dashboard` |
 
-> 별도 엔티티 없이 **검사 데이터 집계 쿼리** 기반.
+> - 별도 엔티티 없이 **검사 데이터 집계 쿼리** 기반
+> - 응답 구조: `summary` (요약 지표) / `defectRateTrend` (최근 7일 일별 불량률) / `actionSummary` (조치 현황, 현재 stub) / `lineDefectRates` (라인별 불량률) / `lastUpdatedAt`
+> - 불량 판정 기준: `Inspection.hasDefect = true`
+> - 변화율(`totalInspectionChangeRate`, `defectRateChange`): 최근 7일 vs 이전 7일 비교
+> - `actionSummary`는 조치 도메인 미구현으로 전부 0 반환; 향후 `DefectAction`/`InspectionAction` 도메인 추가 필요
 
 ### 6. 공정 개선 분석 (Analysis)
 
@@ -223,7 +223,7 @@ src/main/java/com/sjcapstone/
 │   │   │   └── LineResponse.java
 │   │   └── exception/
 │   │       └── LineNotFoundException.java
-│   ├── inspection/            # 검사 생성, 상태 머신, 결과 저장 (예정)
+│   ├── inspection/            # 검사 생성, 상태 머신, 결과 저장 (완료)
 │   ├── notification/          # 알림 생성, SSE 구독, 필터/페이징 조회, 읽음 처리 (완료)
 │   │   ├── controller/
 │   │   │   └── NotificationController.java
@@ -242,7 +242,21 @@ src/main/java/com/sjcapstone/
 │   │   │   └── UnreadCountResponse.java
 │   │   └── exception/
 │   │       └── NotificationNotFoundException.java
-│   ├── dashboard/             # 통계 집계 API — 읽기 전용 (예정)
+│   ├── dashboard/             # 통계 집계 API — 읽기 전용 (완료)
+│   │   ├── controller/
+│   │   │   └── DashboardController.java
+│   │   ├── service/
+│   │   │   ├── DashboardService.java
+│   │   │   └── DashboardServiceImpl.java
+│   │   └── dto/
+│   │       ├── DashboardResponse.java
+│   │       ├── DashboardSummaryResponse.java
+│   │       ├── DefectRateTrendItemResponse.java
+│   │       ├── ActionSummaryResponse.java
+│   │       ├── LineDefectRateResponse.java
+│   │       └── projection/
+│   │           ├── DailyDefectStatsProjection.java
+│   │           └── LineDefectStatsProjection.java
 │   └── analysis/              # AI 공정 개선 분석 요청/결과 관리 (예정)
 ├── internal/                  # 내부 시스템 전용 API (별도 보안 채널)
 │   ├── frame/                 # 프레임 수집 (카메라/엣지 디바이스) (예정)
@@ -290,7 +304,7 @@ src/main/java/com/sjcapstone/
 /api/notifications/unread-count       → 미확인 개수 조회 (ADMIN)
 /api/notifications/{id}/read          → 단건 읽음 처리 (ADMIN)
 /api/notifications/read-all           → 전체 읽음 처리 (ADMIN)
-/api/dashboard/**          → 대시보드 통계 (JWT 필요, 전체 사용자 접근 가능)
+/api/dashboard/**          → 대시보드 통계 (ADMIN 전용)
 /api/analysis/**           → 공정 개선 분석 (ADMIN 전용)
 
 /internal/frames/**        → 프레임 수집 (내부 서비스 키)
@@ -369,9 +383,13 @@ src/main/java/com/sjcapstone/
   }
   ```
 
-### Dashboard (대시보드/통계) — 예정
+### Dashboard (대시보드/통계)
 - 별도 엔티티 없이 검사 데이터 집계 쿼리 기반
-- 불량률 추이, 불량 유형별/교대조별/라인별 통계
+- `GET /api/dashboard` — ADMIN 전용, 단일 엔드포인트로 전체 대시보드 데이터 반환
+- **집계 항목**: 전체/오늘 검사 수, 불량률, 최근 7일 불량률 추이, 라인별 불량률
+- **변화율 산정**: 최근 7일 vs 이전 7일 구간 비교
+- `InspectionRepository`에 native query 추가 (`findDailyDefectStatsSince`, `findLineDefectStats`)
+- `actionSummary`는 현재 stub (0값) — 향후 `DefectAction`/`InspectionAction` 도메인 추가 필요
 
 ### Analysis (공정 개선 분석) — 예정
 - AI 분석 서버에 누적 검사 데이터 기반 LLM 리포트 요청
@@ -391,6 +409,7 @@ src/main/java/com/sjcapstone/
 ### SecurityConfig 공개 엔드포인트
 - `POST /api/auth/login` — 인증 없이 접근 허용 (로그인만 공개, `/api/auth/**` 전체 공개 아님)
 - `/api/admin/**` — `ADMIN` 권한 필요 (`hasRole("ADMIN")`)
+- `/api/dashboard/**` — `ADMIN` 권한 필요 (`hasRole("ADMIN")`)
 - 나머지 모든 엔드포인트 — JWT 필요
 
 ---
@@ -503,10 +522,10 @@ jwt.expiration=86400000   # 24시간 (ms)
 | shift — entity, 예외, Repository, DTO, Service, Controller | 완료 |
 | line — entity, Repository, DTO, Service, Controller, seed 초기화 | 완료 |
 | notification — entity, SSE 구독, 필터/페이징 목록 조회, 미확인 개수, 단건/전체 읽음 처리, ADMIN 전체 발송, 불량 감지 helper | 완료 |
-| inspection | 예정 |
-| dashboard | 예정 |
+| inspection — entity, 상태 머신, CRUD, 분석 시작, 콜백 수신 | 완료 |
+| dashboard — GET /api/dashboard, 집계 쿼리 (요약/추이/라인별), projection | 완료 |
 | analysis | 예정 |
-| internal (frame 수집, AI 콜백) | 예정 |
+| internal (frame 수집, AI 콜백) | 완료 |
 
 ---
 
@@ -518,7 +537,8 @@ jwt.expiration=86400000   # 24시간 (ms)
 | 내부 시스템 인증 방식 | API Key 정적 관리 vs 서비스 토큰 발급 방식 결정 필요 |
 | 검사 상태 머신 정의 | `PENDING → PROCESSING → DONE/FAILED` 전환 규칙 명확화 |
 | AI 분석 서버 연동 방식 | 동기 HTTP 호출 vs 비동기 메시지 큐 (향후 확장성) |
-| dashboard 데이터 정합성 | 실시간 집계 쿼리 vs 별도 집계 테이블 캐싱 여부 |
+| dashboard actionSummary | 조치 도메인 미구현 — `DefectAction`/`InspectionAction` 추가 후 실제 집계로 교체 필요 |
+| dashboard 데이터 정합성 | 현재 실시간 집계 쿼리 — 데이터 증가 시 Redis 캐싱 여부 검토 필요 |
 | inspection과 frame의 관계 | 프레임을 inspection 하위로 볼지, 독립 엔티티로 볼지 |
 | SSE 알림 대상 범위 | 현재 전체 ADMIN 대상으로 구현 완료. 특정 라인 담당자 한정 발송이 필요한 경우 추가 구현 필요 |
 | Redis 도입 시기 | refresh token 저장 용도 |
