@@ -19,6 +19,7 @@
 | Build | Gradle |
 | API 문서 | Swagger (OpenAPI) — 예정 |
 | 알림 | SSE (Server-Sent Events) — 완료 |
+| HTTP Client | RestTemplate (AI 서버 연동) — 완료 |
 | Cache | Redis — 예정 |
 | CI/CD | GitHub Actions / Jenkins — 예정 |
 
@@ -188,26 +189,51 @@ src/main/java/com/sjcapstone/
 │   │       └── PasswordConfirmMismatchException.java
 │   ├── user/                  # 사용자 프로필, 역할, 승인 상태
 │   │   ├── controller/
+│   │   │   └── UserController.java
 │   │   ├── service/
+│   │   │   ├── UserService.java
+│   │   │   └── UserServiceImpl.java
 │   │   ├── repository/
+│   │   │   └── UserRepository.java
 │   │   ├── entity/
 │   │   │   ├── User.java
 │   │   │   ├── UserRole.java   (enum: ADMIN/WORKER)
 │   │   │   └── UserStatus.java (enum: ACTIVE/INACTIVE/PENDING)
 │   │   ├── dto/
+│   │   │   ├── UserResponse.java
+│   │   │   ├── UserListResponse.java
+│   │   │   └── UserUpdateRequest.java
 │   │   └── exception/
+│   │       ├── UserNotFoundException.java
 │   │       ├── ShiftRequiredForWorkerException.java
-│   │       └── LineRequiredForWorkerException.java
+│   │       ├── LineRequiredForWorkerException.java
+│   │       ├── DuplicateEmailException.java
+│   │       ├── DuplicateEmployeeIdException.java
+│   │       └── DuplicateEmployeeNumberException.java
 │   ├── shift/                 # 교대조 마스터, 날짜별 배정
 │   │   ├── controller/
+│   │   │   └── ShiftController.java
 │   │   ├── service/
+│   │   │   ├── ShiftService.java
+│   │   │   └── ShiftServiceImpl.java
 │   │   ├── repository/
+│   │   │   ├── ShiftRepository.java
+│   │   │   └── ShiftAssignmentRepository.java
 │   │   ├── entity/
 │   │   │   ├── Shift.java
 │   │   │   ├── ShiftType.java  (enum: DAY/EVENING/NIGHT)
 │   │   │   └── ShiftAssignment.java
 │   │   ├── dto/
+│   │   │   ├── ShiftCreateRequest.java
+│   │   │   ├── ShiftUpdateRequest.java
+│   │   │   ├── ShiftResponse.java
+│   │   │   ├── ShiftAssignmentRequest.java
+│   │   │   └── ShiftAssignmentResponse.java
 │   │   └── exception/
+│   │       ├── ShiftNotFoundException.java
+│   │       ├── ShiftInactiveException.java
+│   │       ├── ShiftAlreadyAssignedException.java
+│   │       └── InvalidShiftTimeException.java
 │   ├── line/                  # 생산라인 마스터
 │   │   ├── controller/
 │   │   │   └── LineController.java
@@ -223,8 +249,28 @@ src/main/java/com/sjcapstone/
 │   │   │   └── LineResponse.java
 │   │   └── exception/
 │   │       └── LineNotFoundException.java
-│   ├── inspection/            # 검사 생성, 상태 머신, 결과 저장 (완료)
-│   ├── notification/          # 알림 생성, SSE 구독, 필터/페이징 조회, 읽음 처리 (완료)
+│   ├── inspection/            # 검사 생성, 상태 머신, AI 연동, 결과 저장 — 완료
+│   │   ├── controller/
+│   │   │   └── InspectionController.java
+│   │   ├── service/
+│   │   │   ├── InspectionService.java
+│   │   │   └── InspectionServiceImpl.java
+│   │   ├── repository/
+│   │   │   └── InspectionRepository.java
+│   │   ├── entity/
+│   │   │   ├── Inspection.java
+│   │   │   ├── InspectionStatus.java  (enum: PENDING/PROCESSING/DONE/FAILED)
+│   │   │   └── DefectType.java        (enum: SCRATCH/DENT/CRACK/CONTAMINATION/MISSING_PART/DIMENSION_ERROR)
+│   │   ├── dto/
+│   │   │   ├── InspectionCreateRequest.java
+│   │   │   ├── InspectionResponse.java
+│   │   │   ├── InspectionListItemResponse.java
+│   │   │   ├── InspectionPageResponse.java
+│   │   │   └── InspectionStatusResponse.java
+│   │   └── exception/
+│   │       ├── InspectionNotFoundException.java
+│   │       └── InvalidInspectionStatusException.java
+│   ├── notification/          # 알림 생성, SSE 구독, 필터/페이징 조회, 읽음 처리 — 완료
 │   │   ├── controller/
 │   │   │   └── NotificationController.java
 │   │   ├── service/
@@ -242,7 +288,7 @@ src/main/java/com/sjcapstone/
 │   │   │   └── UnreadCountResponse.java
 │   │   └── exception/
 │   │       └── NotificationNotFoundException.java
-│   ├── dashboard/             # 통계 집계 API — 읽기 전용 (완료)
+│   ├── dashboard/             # 통계 집계 API — 읽기 전용 — 완료
 │   │   ├── controller/
 │   │   │   └── DashboardController.java
 │   │   ├── service/
@@ -257,15 +303,25 @@ src/main/java/com/sjcapstone/
 │   │       └── projection/
 │   │           ├── DailyDefectStatsProjection.java
 │   │           └── LineDefectStatsProjection.java
-│   └── analysis/              # AI 공정 개선 분석 요청/결과 관리 (예정)
+│   └── analysis/              # AI 공정 개선 분석 요청/결과 관리 — 예정
 ├── internal/                  # 내부 시스템 전용 API (별도 보안 채널)
-│   ├── frame/                 # 프레임 수집 (카메라/엣지 디바이스) (예정)
-│   └── callback/              # 분석 완료 콜백 (AI 서버) (예정)
+│   ├── frame/                 # 프레임 수집 (카메라/엣지 디바이스) — 완료
+│   │   └── InternalFrameController.java
+│   └── callback/              # 분석 완료 콜백 (AI 서버) — 완료
+│       ├── InternalCallbackController.java
+│       └── dto/
+│           └── AnalysisCallbackRequest.java
 └── global/
     ├── config/
     │   ├── JpaAuditingConfig.java
     │   ├── SecurityConfig.java      # 사용자 JWT + 내부 시스템 키 — 2개 Filter Chain
+    │   ├── RestTemplateConfig.java  # RestTemplate 빈 등록 (AI 서버 HTTP 호출용)
+    │   ├── CorsConfig.java
+    │   ├── AdminDataInitializer.java
     │   └── LineDataInitializer.java # ApplicationRunner — A/B/C 라인 seed 데이터
+    ├── client/
+    │   ├── AiAnalysisClient.java    # AI 서버 HTTP 호출 (POST /analyze)
+    │   └── AiAnalysisRequest.java   # AI 서버 요청 DTO { inspectionId, imageUrl, callbackUrl }
     ├── entity/
     │   └── BaseEntity.java          # createdAt, updatedAt (JPA Auditing)
     ├── exception/
@@ -281,7 +337,9 @@ src/main/java/com/sjcapstone/
         ├── jwt/
         │   ├── JwtProvider.java
         │   └── JwtAuthenticationFilter.java
-        └── internal/              # 내부 시스템 키 검증 (예정)
+        └── internal/              # 내부 시스템 키 검증 — 완료
+            ├── InternalApiKeyFilter.java
+            └── InternalApiKeyProperties.java
 ```
 
 ---
@@ -355,10 +413,12 @@ src/main/java/com/sjcapstone/
 - 비활성 라인에는 WORKER 배정 불가 (`findByIdAndIsActiveTrue` 사용)
 - `User`의 `line_id` FK로 연결
 
-### Inspection (검사) — 예정
+### Inspection (검사)
 - 검사 생성, 상태 전환, 프레임 결과 저장
 - 상태 머신: `PENDING → PROCESSING → DONE / FAILED`
 - 불량 확정 시 `notification` 도메인으로 알림 트리거
+- **AI 서버 연동 흐름**: `POST /api/inspections/{id}/analyze` → `AiAnalysisClient.requestAnalysis()` → AI 서버 `POST /analyze` 호출 → AI 서버가 `POST /internal/callbacks/{id}` 로 결과 콜백
+- AI 서버 요청 페이로드: `{ inspectionId, imageUrl, callbackUrl }` (`callbackUrl` = `app.base-url + /internal/callbacks/{id}`)
 
 ### Notification (알림)
 - 불량 발생 시 ADMIN 대상 알림 생성 (soft delete된 사용자 제외)
@@ -499,7 +559,18 @@ spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
 # JWT
 jwt.secret=<Base64 인코딩된 시크릿 키 — 운영 환경에서는 반드시 교체>
 jwt.expiration=86400000   # 24시간 (ms)
+
+# Internal API Key
+internal.service-key=YOUR_INTERNAL_SERVICE_KEY
+
+# AI Server (ngrok URL - update on every ngrok restart)
+ai.server.url=https://your-ai-ngrok-url.ngrok.io
+
+# Backend public URL (used as callback base URL for AI server)
+app.base-url=https://your-backend-ngrok-url.ngrok.io
 ```
+
+> `ai.server.url`과 `app.base-url`은 ngrok 재실행 시마다 새 URL로 교체 필요.
 
 ### JPA Auditing
 - `@EnableJpaAuditing`은 `JpaAuditingConfig.java`에 분리 선언 (CapstoneApplication에 두지 않음)
@@ -522,7 +593,8 @@ jwt.expiration=86400000   # 24시간 (ms)
 | shift — entity, 예외, Repository, DTO, Service, Controller | 완료 |
 | line — entity, Repository, DTO, Service, Controller, seed 초기화 | 완료 |
 | notification — entity, SSE 구독, 필터/페이징 목록 조회, 미확인 개수, 단건/전체 읽음 처리, ADMIN 전체 발송, 불량 감지 helper | 완료 |
-| inspection — entity, 상태 머신, CRUD, 분석 시작, 콜백 수신 | 완료 |
+| inspection — entity, 상태 머신, CRUD, 분석 시작, AI 서버 HTTP 호출, 콜백 수신 | 완료 |
+| global/client — AiAnalysisClient (RestTemplate 기반 AI 서버 연동) | 완료 |
 | dashboard — GET /api/dashboard, 집계 쿼리 (요약/추이/라인별), projection | 완료 |
 | analysis | 예정 |
 | internal (frame 수집, AI 콜백) | 완료 |
@@ -536,7 +608,7 @@ jwt.expiration=86400000   # 24시간 (ms)
 | PENDING 유저 API 접근 제한 | 승인 전 `/api/users/**`, `/api/shifts/**` 등 접근 차단 여부 결정 필요 |
 | 내부 시스템 인증 방식 | API Key 정적 관리 vs 서비스 토큰 발급 방식 결정 필요 |
 | 검사 상태 머신 정의 | `PENDING → PROCESSING → DONE/FAILED` 전환 규칙 명확화 |
-| AI 분석 서버 연동 방식 | 동기 HTTP 호출 vs 비동기 메시지 큐 (향후 확장성) |
+| AI 분석 서버 연동 방식 | RestTemplate 동기 HTTP 호출로 결정 및 구현 완료. 향후 트래픽 증가 시 비동기 메시지 큐 전환 검토 필요 |
 | dashboard actionSummary | 조치 도메인 미구현 — `DefectAction`/`InspectionAction` 추가 후 실제 집계로 교체 필요 |
 | dashboard 데이터 정합성 | 현재 실시간 집계 쿼리 — 데이터 증가 시 Redis 캐싱 여부 검토 필요 |
 | inspection과 frame의 관계 | 프레임을 inspection 하위로 볼지, 독립 엔티티로 볼지 |
