@@ -17,6 +17,7 @@ import com.sjcapstone.domain.user.entity.User;
 import com.sjcapstone.domain.user.entity.UserRole;
 import com.sjcapstone.domain.user.exception.UserNotFoundException;
 import com.sjcapstone.domain.user.repository.UserRepository;
+import com.sjcapstone.global.client.AiAnalysisClient;
 import com.sjcapstone.global.exception.CustomException;
 import com.sjcapstone.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,7 @@ public class InspectionServiceImpl implements InspectionService {
     private final ShiftRepository shiftRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    private final AiAnalysisClient aiAnalysisClient;
 
     @Override
     public InspectionResponse createInspection(InspectionCreateRequest request) {
@@ -139,6 +141,7 @@ public class InspectionServiceImpl implements InspectionService {
         }
 
         inspection.startProcessing();
+        aiAnalysisClient.requestAnalysis(inspection.getId(), inspection.getImageUrl());
         return InspectionResponse.from(inspection);
     }
 
