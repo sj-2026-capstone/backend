@@ -81,12 +81,12 @@
 
 | 기능 | 주체 | 엔드포인트 |
 |---|---|---|
-| 검사 생성 | ADMIN | `POST /api/inspections` |
+| 검사 생성 (개발/테스트용) | ADMIN | `POST /api/inspections` |
 | 검사 이력 목록 조회 (필터/페이징) | WORKER, ADMIN | `GET /api/inspections?lineId=&status=&page=&size=` |
 | 검사 상세 조회 | WORKER, ADMIN | `GET /api/inspections/{inspectionId}` |
 | 검사 상태 조회 | WORKER, ADMIN | `GET /api/inspections/{inspectionId}/status` |
-| 검사 분석 시작 | ADMIN | `POST /api/inspections/{inspectionId}/analyze` |
-| 프레임 수집 (검사 생성) | 카메라/엣지 디바이스 | `POST /internal/frames` |
+| 검사 분석 시작 (개발/테스트용) | ADMIN | `POST /api/inspections/{inspectionId}/analyze` |
+| 프레임 수집 (검사 생성 + 분석 즉시 시작) | 카메라/엣지 디바이스 | `POST /internal/frames` |
 | 분석 완료 콜백 수신 | AI 분석 서버 | `POST /internal/callbacks/{inspectionId}` |
 
 > - 검사 도메인은 **상태 머신** 성격: `PENDING → PROCESSING → DONE / FAILED`
@@ -94,6 +94,8 @@
 > - `ADMIN`은 전체 조회 가능, `lineId` / `status` 필터 지원
 > - 콜백 수신 시 `hasDefect=true`이면 `NotificationService.sendDefectDetected()` 자동 호출 → ADMIN 전체 알림 발송
 > - `DefectType`: `SCRATCH` / `DENT` / `CRACK` / `CONTAMINATION` / `MISSING_PART` / `DIMENSION_ERROR`
+> - **실제 운영 흐름** (`POST /internal/frames`): 카메라/엣지 디바이스가 프레임을 전송하면 검사 생성과 동시에 AI 분석이 자동 시작됨 (`createInspectionAndStartAnalysis`)
+> - **개발/테스트 흐름** (`POST /api/inspections` → `POST /api/inspections/{id}/analyze`): 실물 카메라 없이 테스트할 때 ADMIN이 수동으로 검사를 생성하고 분석을 시작하는 용도. 카메라 연동 완료 후 제거 검토 필요
 
 ### 4. 알림 (Notification)
 
@@ -417,8 +419,11 @@ src/main/java/com/sjcapstone/
 - 검사 생성, 상태 전환, 프레임 결과 저장
 - 상태 머신: `PENDING → PROCESSING → DONE / FAILED`
 - 불량 확정 시 `notification` 도메인으로 알림 트리거
-- **AI 서버 연동 흐름**: `POST /api/inspections/{id}/analyze` → `AiAnalysisClient.requestAnalysis()` → AI 서버 `POST /analyze` 호출 → AI 서버가 `POST /internal/callbacks/{id}` 로 결과 콜백
+- **실시간 검사 흐름** (카메라/엣지 디바이스): `POST /internal/frames` → `createInspectionAndStartAnalysis()` → 검사 생성 + `startProcessing()` + `AiAnalysisClient.requestAnalysis()` 즉시 호출 → AI 서버가 `POST /internal/callbacks/{id}`로 결과 콜백
+- **수동 검사 흐름** (ADMIN): `POST /api/inspections` (검사 생성, PENDING 상태) → `POST /api/inspections/{id}/analyze` → `startAnalysis()` → AI 서버 연동
 - AI 서버 요청 페이로드: `{ inspectionId, imageUrl, callbackUrl }` (`callbackUrl` = `app.base-url + /internal/callbacks/{id}`)
+- `createInspectionAndStartAnalysis()`에서 AI 요청 실패 시 `inspection.fail()`로 상태 FAILED 처리 (예외 전파 없음)
+- **주의**: `createInspectionAndStartAnalysis()`는 `@Transactional` 범위 안에서 AI 서버 HTTP 호출을 동기로 실행 → AI 응답 대기 중 DB 커넥션이 계속 점유됨. 현재 규모에서는 문제없으나 트래픽 증가 시 커넥션 풀 고갈 위험 → 비동기 처리 전환 검토 필요
 
 ### Notification (알림)
 - 불량 발생 시 ADMIN 대상 알림 생성 (soft delete된 사용자 제외)
@@ -608,7 +613,7 @@ app.base-url=https://your-backend-ngrok-url.ngrok.io
 | PENDING 유저 API 접근 제한 | 승인 전 `/api/users/**`, `/api/shifts/**` 등 접근 차단 여부 결정 필요 |
 | 내부 시스템 인증 방식 | API Key 정적 관리 vs 서비스 토큰 발급 방식 결정 필요 |
 | 검사 상태 머신 정의 | `PENDING → PROCESSING → DONE/FAILED` 전환 규칙 명확화 |
-| AI 분석 서버 연동 방식 | RestTemplate 동기 HTTP 호출로 결정 및 구현 완료. 향후 트래픽 증가 시 비동기 메시지 큐 전환 검토 필요 |
+| AI 분석 서버 연동 방식 | RestTemplate 동기 HTTP 호출로 구현 완료. `@Transactional` 범위 안에서 HTTP 호출이 실행되어 AI 응답 대기 중 DB 커넥션이 점유됨 — 트래픽 증가 시 커넥션 풀 고갈 위험, 비동기 메시지 큐 전환 검토 필요 |
 | dashboard actionSummary | 조치 도메인 미구현 — `DefectAction`/`InspectionAction` 추가 후 실제 집계로 교체 필요 |
 | dashboard 데이터 정합성 | 현재 실시간 집계 쿼리 — 데이터 증가 시 Redis 캐싱 여부 검토 필요 |
 | inspection과 frame의 관계 | 프레임을 inspection 하위로 볼지, 독립 엔티티로 볼지 |

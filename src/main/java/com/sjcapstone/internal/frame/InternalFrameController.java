@@ -25,8 +25,8 @@ public class InternalFrameController {
     public ResponseEntity<CommonResponse<InspectionResponse>> uploadFrame(
             @RequestBody @Valid InspectionCreateRequest request) {
 
-        InspectionResponse response = inspectionService.createInspection(request);
+        InspectionResponse response = inspectionService.createInspectionAndStartAnalysis(request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(CommonResponse.ok("검사가 생성되었습니다.", response));
+                .body(CommonResponse.ok("프레임이 접수되어 분석이 시작되었습니다.", response));
     }
 }

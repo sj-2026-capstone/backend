@@ -10,6 +10,8 @@ public interface InspectionService {
 
     InspectionResponse createInspection(InspectionCreateRequest request);
 
+    InspectionResponse createInspectionAndStartAnalysis(InspectionCreateRequest request);
+
     InspectionPageResponse getInspections(Long userId, UserRole role, Long lineId, InspectionStatus status, Pageable pageable);
 
     InspectionResponse getInspection(Long inspectionId, Long userId, UserRole role);

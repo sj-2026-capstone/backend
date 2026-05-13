@@ -40,6 +40,24 @@ public class InspectionServiceImpl implements InspectionService {
 
     @Override
     public InspectionResponse createInspection(InspectionCreateRequest request) {
+        return InspectionResponse.from(inspectionRepository.save(createInspectionEntity(request)));
+    }
+
+    @Override
+    public InspectionResponse createInspectionAndStartAnalysis(InspectionCreateRequest request) {
+        Inspection inspection = inspectionRepository.save(createInspectionEntity(request));
+
+        inspection.startProcessing();
+        try {
+            aiAnalysisClient.requestAnalysis(inspection.getId(), inspection.getImageUrl());
+        } catch (Exception e) {
+            inspection.fail("AI 분석 요청 실패: " + e.getMessage());
+        }
+
+        return InspectionResponse.from(inspection);
+    }
+
+    private Inspection createInspectionEntity(InspectionCreateRequest request) {
         Line line = lineRepository.findByIdAndIsActiveTrue(request.getLineId())
                 .orElseThrow(LineNotFoundException::new);
 
@@ -64,7 +82,7 @@ public class InspectionServiceImpl implements InspectionService {
                 .imageUrl(request.getImageUrl())
                 .build();
 
-        return InspectionResponse.from(inspectionRepository.save(inspection));
+        return inspection;
     }
 
     @Override
