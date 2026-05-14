@@ -164,7 +164,7 @@ public class InspectionServiceImpl implements InspectionService {
     }
 
     @Override
-    public void processAnalysisCallback(Long inspectionId, boolean hasDefect, DefectType defectType, String resultNote) {
+    public void processAnalysisCallback(Long inspectionId, boolean hasDefect, DefectType defectType, String resultNote, String gradCamImageUrl) {
         Inspection inspection = inspectionRepository.findById(inspectionId)
                 .orElseThrow(InspectionNotFoundException::new);
 
@@ -172,7 +172,7 @@ public class InspectionServiceImpl implements InspectionService {
             throw new InvalidInspectionStatusException();
         }
 
-        inspection.complete(hasDefect, defectType, resultNote);
+        inspection.complete(hasDefect, defectType, resultNote, gradCamImageUrl);
 
         if (hasDefect) {
             String defectDisplayName = defectType != null ? defectType.getDisplayName() : "알 수 없음";

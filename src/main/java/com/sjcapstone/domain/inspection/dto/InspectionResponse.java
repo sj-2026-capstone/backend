@@ -24,6 +24,7 @@ public class InspectionResponse {
     private String defectDisplayName;
     private Boolean hasDefect;
     private String imageUrl;
+    private String gradCamImageUrl;
     private String resultNote;
     private LocalDateTime inspectedAt;
     private LocalDateTime createdAt;
@@ -40,6 +41,7 @@ public class InspectionResponse {
                 .defectDisplayName(inspection.getDefectType() != null ? inspection.getDefectType().getDisplayName() : null)
                 .hasDefect(inspection.getHasDefect())
                 .imageUrl(inspection.getImageUrl())
+                .gradCamImageUrl(inspection.getGradCamImageUrl())
                 .resultNote(inspection.getResultNote())
                 .inspectedAt(inspection.getInspectedAt())
                 .createdAt(inspection.getCreatedAt())

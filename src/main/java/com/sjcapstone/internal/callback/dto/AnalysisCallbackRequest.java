@@ -15,4 +15,6 @@ public class AnalysisCallbackRequest {
     private DefectType defectType;
 
     private String resultNote;
+
+    private String gradCamImageUrl;
 }
