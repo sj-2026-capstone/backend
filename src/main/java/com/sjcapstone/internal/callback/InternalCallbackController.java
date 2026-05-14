@@ -25,7 +25,8 @@ public class InternalCallbackController {
                 inspectionId,
                 request.getHasDefect(),
                 request.getDefectType(),
-                request.getResultNote()
+                request.getResultNote(),
+                request.getGradCamImageUrl()
         );
         return ResponseEntity.ok(CommonResponse.ok("분석 결과가 처리되었습니다."));
     }

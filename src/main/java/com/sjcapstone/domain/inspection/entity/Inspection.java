@@ -49,6 +49,9 @@ public class Inspection extends BaseEntity {
     @Column(name = "image_url")
     private String imageUrl;
 
+    @Column(name = "grad_cam_image_url")
+    private String gradCamImageUrl;
+
     @Column(name = "result_note", columnDefinition = "TEXT")
     private String resultNote;
 
@@ -69,11 +72,12 @@ public class Inspection extends BaseEntity {
         this.status = InspectionStatus.PROCESSING;
     }
 
-    public void complete(boolean hasDefect, DefectType defectType, String resultNote) {
+    public void complete(boolean hasDefect, DefectType defectType, String resultNote, String gradCamImageUrl) {
         this.status = InspectionStatus.DONE;
         this.hasDefect = hasDefect;
         this.defectType = defectType;
         this.resultNote = resultNote;
+        this.gradCamImageUrl = gradCamImageUrl;
         this.inspectedAt = LocalDateTime.now();
     }
 

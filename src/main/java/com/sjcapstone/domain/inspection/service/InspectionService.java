@@ -20,5 +20,5 @@ public interface InspectionService {
 
     InspectionResponse startAnalysis(Long inspectionId, Long userId, UserRole role);
 
-    void processAnalysisCallback(Long inspectionId, boolean hasDefect, DefectType defectType, String resultNote);
+    void processAnalysisCallback(Long inspectionId, boolean hasDefect, DefectType defectType, String resultNote, String gradCamImageUrl);
 }
