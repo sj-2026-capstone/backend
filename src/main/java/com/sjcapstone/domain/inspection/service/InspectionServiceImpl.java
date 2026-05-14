@@ -159,7 +159,11 @@ public class InspectionServiceImpl implements InspectionService {
         }
 
         inspection.startProcessing();
-        aiAnalysisClient.requestAnalysis(inspection.getId(), inspection.getImageUrl());
+        try {
+            aiAnalysisClient.requestAnalysis(inspection.getId(), inspection.getImageUrl());
+        } catch (Exception e) {
+            inspection.fail("AI 분석 요청 실패: " + e.getMessage());
+        }
         return InspectionResponse.from(inspection);
     }
 
