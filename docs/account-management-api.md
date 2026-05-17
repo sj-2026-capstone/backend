@@ -1,69 +1,30 @@
 # Account Management API
 
-현재 계정 관리와 기준정보 API 계약을 정리한 문서다. 프론트 계정 관리 UI는 이 문서를 기준으로 `auth`, `admin`, `user`, `line`, `shift` API를 연동한다.
+계정 관리 및 기준정보 API 연동 문서. `auth`, `admin`, `line`, `shift` 도메인을 다룬다.
 
 ---
 
-## 구현 상태
+## 공통
 
-`auth`, `admin`, `user`, `line`, `shift`의 1차 API는 구현 완료 상태다.
+### Base URL
 
-다만 아래 항목은 이후 도메인 확장에 따라 바뀔 수 있다.
+```
+http://localhost:8080
+```
 
-- `inspection` 도메인 추가 시 사용자/라인/교대조 연결 정보가 더 필요할 수 있다.
-- `notification` 발송 대상 정책이 정해지면 관리자 계정 관리 응답에 알림 설정이 추가될 수 있다.
-- 운영 전에는 DB migration 전략과 초기 `shift` seed 방식 정리가 필요하다.
+> ngrok 연결 시 ngrok URL로 교체한다.
 
----
+### 인증 헤더
 
-## 책임 분리
+로그인 API를 제외한 모든 API는 JWT 토큰이 필요하다.
 
-### Auth
+```http
+Authorization: Bearer {accessToken}
+```
 
-인증 자체만 담당한다.
+### 응답 형식
 
-- 로그인
-- 현재 사용자 조회
-- 비밀번호 변경
-- JWT 발급/검증
-
-공개 회원가입 또는 관리자 계정 생성 책임은 갖지 않는다.
-
-### Admin
-
-관리자 운영용 계정 관리 기능을 담당한다.
-
-- 계정 생성
-- 계정 목록/상세 조회
-- 계정 수정
-- 계정 상태 변경
-- 로그인 ID 중복 확인
-- 계정 요약 조회
-
-### User
-
-사용자 프로필 조회/수정/삭제를 담당한다. 계정 생성은 담당하지 않는다.
-
-### Line
-
-생산라인 기준정보를 담당한다.
-
-- 라인은 `A`, `B`, `C` 3개 고정
-- 앱 시작 시 `A라인`, `B라인`, `C라인` 자동 삽입
-- 실제 테이블명은 MySQL 예약어 충돌을 피하기 위해 `production_lines`
-
-### Shift
-
-근무조와 날짜별 교대 배정을 담당한다. `line`과는 별개다.
-
-- `shift`: 근무조
-- `line`: 생산라인
-
----
-
-## 공통 응답 형식
-
-성공 응답은 `CommonResponse<T>`로 감싼다.
+**성공**
 
 ```json
 {
@@ -73,7 +34,7 @@
 }
 ```
 
-실패 응답은 `ErrorResponse`를 사용한다.
+**실패**
 
 ```json
 {
@@ -82,22 +43,31 @@
 }
 ```
 
-인증이 필요한 API는 `Authorization` 헤더를 사용한다.
+### 에러 코드 목록
 
-```http
-Authorization: Bearer {accessToken}
-```
+| code | HTTP | 발생 상황 |
+|---|---|---|
+| `AUTH_NOT_FOUND` | 404 | loginId가 존재하지 않음 |
+| `INVALID_PASSWORD` | 400 | 비밀번호 불일치 |
+| `PASSWORD_CONFIRM_MISMATCH` | 400 | 새 비밀번호와 확인 비밀번호 불일치 |
+| `DUPLICATE_LOGIN_ID` | 409 | 이미 사용 중인 loginId |
+| `DUPLICATE_EMAIL` | 409 | 이미 사용 중인 이메일 |
+| `USER_NOT_FOUND` | 404 | 존재하지 않는 사용자 |
+| `SHIFT_NOT_FOUND` | 404 | 존재하지 않는 교대조 |
+| `LINE_NOT_FOUND` | 404 | 존재하지 않는 라인 |
+| `SHIFT_REQUIRED_FOR_WORKER` | 400 | WORKER 계정 생성/수정 시 shiftId 누락 |
+| `LINE_REQUIRED_FOR_WORKER` | 400 | WORKER 계정 생성/수정 시 lineId 누락 |
+| `UNAUTHORIZED` | 401 | 토큰 없음 또는 만료 |
+| `FORBIDDEN` | 403 | 권한 없음 (ADMIN 전용 API를 WORKER가 호출) |
 
----
+### Enum 값
 
-## 정책
-
-- `WORKER` 계정은 `shiftId`, `lineId`가 필수다.
-- `ADMIN` 계정은 `shiftId`, `lineId`가 nullable이다.
-- `email`, `phone`은 optional이다.
-- `loginId`는 인증 식별자이며 중복될 수 없다.
-- 신규 생성 계정은 `passwordChangeRequired: true` 상태로 생성된다.
-- 비밀번호 변경이 완료되면 `passwordChangeRequired: false`로 바뀐다.
+| 타입 | 값 |
+|---|---|
+| `role` | `ADMIN`, `WORKER` |
+| `status` | `ACTIVE`, `INACTIVE`, `PENDING` |
+| `shiftType` | `DAY`, `EVENING`, `NIGHT` |
+| `lineCode` | `A`, `B`, `C` |
 
 ---
 
@@ -105,9 +75,19 @@ Authorization: Bearer {accessToken}
 
 ### 로그인
 
-`POST /api/auth/login`
+로그인 성공 시 발급된 `accessToken`을 이후 모든 API 요청에 사용한다.  
+`passwordChangeRequired: true`이면 비밀번호 변경 화면으로 이동시킨다.
 
-Request:
+```
+POST /api/auth/login
+```
+
+**Request Body**
+
+| 필드 | 타입 | 필수 | 제약 |
+|---|---|---|---|
+| `loginId` | string | Y | 최대 50자 |
+| `password` | string | Y | - |
 
 ```json
 {
@@ -116,14 +96,14 @@ Request:
 }
 ```
 
-Response:
+**Response (200)**
 
 ```json
 {
   "success": true,
   "message": "로그인 성공",
   "data": {
-    "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
+    "accessToken": "eyJhbGciOiJIUzUxMiJ9...",
     "userId": 1,
     "userName": "홍길동",
     "loginId": "worker01",
@@ -133,11 +113,25 @@ Response:
 }
 ```
 
-### 현재 사용자 조회
+**Error**
 
-`GET /api/auth/me`
+| code | 상황 |
+|---|---|
+| `AUTH_NOT_FOUND` | loginId 없음 |
+| `INVALID_PASSWORD` | 비밀번호 틀림 |
 
-Response:
+---
+
+### 내 정보 조회
+
+현재 로그인한 사용자의 프로필을 반환한다.
+
+```
+GET /api/auth/me
+Authorization: Bearer {accessToken}
+```
+
+**Response (200)**
 
 ```json
 {
@@ -151,7 +145,7 @@ Response:
     "role": "WORKER",
     "status": "ACTIVE",
     "shiftId": 1,
-    "shiftName": "주간",
+    "shiftName": "1조",
     "lineId": 1,
     "lineCode": "A",
     "lineName": "A라인",
@@ -162,21 +156,36 @@ Response:
 }
 ```
 
+> `shiftId`, `shiftName`, `lineId`, `lineCode`, `lineName`, `email`, `phone`은 미설정 시 `null`.
+
+---
+
 ### 비밀번호 변경
 
-`PATCH /api/auth/password`
+현재 비밀번호 확인 후 새 비밀번호로 변경한다.
 
-Request:
+```
+PATCH /api/auth/password
+Authorization: Bearer {accessToken}
+```
+
+**Request Body**
+
+| 필드 | 타입 | 필수 | 제약 |
+|---|---|---|---|
+| `currentPassword` | string | Y | - |
+| `newPassword` | string | Y | 최소 8자 |
+| `confirmPassword` | string | Y | newPassword와 동일해야 함 |
 
 ```json
 {
   "currentPassword": "password123",
-  "newPassword": "newPassword123",
-  "confirmPassword": "newPassword123"
+  "newPassword": "newPassword123!",
+  "confirmPassword": "newPassword123!"
 }
 ```
 
-Response:
+**Response (200)**
 
 ```json
 {
@@ -186,22 +195,48 @@ Response:
 }
 ```
 
+**Error**
+
+| code | 상황 |
+|---|---|
+| `INVALID_PASSWORD` | 현재 비밀번호 틀림 |
+| `PASSWORD_CONFIRM_MISMATCH` | newPassword와 confirmPassword 불일치 |
+
 ---
 
 ## Admin Account API
 
+> 모든 Admin API는 `ADMIN` 권한 필요. `WORKER` 토큰으로 호출 시 `403 FORBIDDEN`.
+
 ### 계정 생성
 
-`POST /api/admin/accounts`
+ADMIN이 직접 계정을 생성한다. 생성된 계정은 `passwordChangeRequired: true` 상태이며, 최초 로그인 후 비밀번호 변경이 필요하다.
 
-Request:
+```
+POST /api/admin/accounts
+Authorization: Bearer {accessToken}
+```
+
+**Request Body**
+
+| 필드 | 타입 | 필수 | 제약 |
+|---|---|---|---|
+| `userName` | string | Y | 최대 100자 |
+| `loginId` | string | Y | 최대 50자, 중복 불가 |
+| `password` | string | Y | 최소 8자 |
+| `confirmPassword` | string | Y | password와 동일해야 함 |
+| `role` | string | Y | `ADMIN` 또는 `WORKER` |
+| `shiftId` | number | WORKER 필수 | ADMIN은 nullable |
+| `lineId` | number | WORKER 필수 | ADMIN은 nullable |
+| `email` | string | N | 이메일 형식, 최대 100자 |
+| `phone` | string | N | 최대 20자 |
 
 ```json
 {
   "userName": "홍길동",
   "loginId": "worker01",
-  "password": "password123",
-  "confirmPassword": "password123",
+  "password": "password123!",
+  "confirmPassword": "password123!",
   "role": "WORKER",
   "shiftId": 1,
   "lineId": 1,
@@ -210,21 +245,21 @@ Request:
 }
 ```
 
-Response:
+**Response (201)**
 
 ```json
 {
   "success": true,
   "message": "계정이 생성되었습니다.",
   "data": {
-    "userId": 1,
+    "userId": 5,
     "employeeId": "550e8400-e29b-41d4-a716-446655440000",
     "userName": "홍길동",
     "loginId": "worker01",
     "role": "WORKER",
     "status": "ACTIVE",
     "shiftId": 1,
-    "shiftName": "주간",
+    "shiftName": "1조",
     "lineId": 1,
     "lineCode": "A",
     "lineName": "A라인",
@@ -235,11 +270,36 @@ Response:
 }
 ```
 
+**Error**
+
+| code | 상황 |
+|---|---|
+| `DUPLICATE_LOGIN_ID` | loginId 중복 |
+| `DUPLICATE_EMAIL` | 이메일 중복 |
+| `PASSWORD_CONFIRM_MISMATCH` | 비밀번호 확인 불일치 |
+| `SHIFT_REQUIRED_FOR_WORKER` | WORKER인데 shiftId 없음 |
+| `LINE_REQUIRED_FOR_WORKER` | WORKER인데 lineId 없음 |
+| `SHIFT_NOT_FOUND` | 존재하지 않는 shiftId |
+| `LINE_NOT_FOUND` | 존재하지 않는 lineId |
+
+---
+
 ### 로그인 ID 중복 확인
 
-`GET /api/admin/accounts/login-id/availability?loginId=worker01`
+계정 생성 폼에서 loginId 입력 시 실시간 중복 확인에 사용한다.
 
-Response:
+```
+GET /api/admin/accounts/login-id/availability?loginId=worker01
+Authorization: Bearer {accessToken}
+```
+
+**Query Parameter**
+
+| 파라미터 | 필수 | 설명 |
+|---|---|---|
+| `loginId` | Y | 중복 확인할 로그인 ID |
+
+**Response (200)**
 
 ```json
 {
@@ -252,11 +312,20 @@ Response:
 }
 ```
 
-### 계정 요약 조회
+> `available: true` → 사용 가능, `available: false` → 중복
 
-`GET /api/admin/accounts/summary`
+---
 
-Response:
+### 계정 요약 통계
+
+계정 관리 화면 상단의 요약 카드에 사용한다.
+
+```
+GET /api/admin/accounts/summary
+Authorization: Bearer {accessToken}
+```
+
+**Response (200)**
 
 ```json
 {
@@ -271,18 +340,25 @@ Response:
 }
 ```
 
+---
+
 ### 계정 목록 조회
 
-`GET /api/admin/accounts?keyword=홍길동&status=ACTIVE&page=0&size=10`
+```
+GET /api/admin/accounts?keyword=홍길동&status=ACTIVE&page=0&size=10
+Authorization: Bearer {accessToken}
+```
 
-Query parameters:
+**Query Parameters**
 
-- `keyword`: optional, 사용자 이름 또는 로그인 ID 검색
-- `status`: optional, `PENDING`, `ACTIVE`, `INACTIVE`
-- `page`: optional, default `0`
-- `size`: optional, default `10`
+| 파라미터 | 필수 | 기본값 | 설명 |
+|---|---|---|---|
+| `keyword` | N | - | 이름 또는 loginId 검색 |
+| `status` | N | - | `ACTIVE`, `INACTIVE`, `PENDING` |
+| `page` | N | `0` | 페이지 번호 (0부터 시작) |
+| `size` | N | `10` | 페이지당 항목 수 |
 
-Response:
+**Response (200)**
 
 ```json
 {
@@ -297,7 +373,7 @@ Response:
         "role": "WORKER",
         "status": "ACTIVE",
         "shiftId": 1,
-        "shiftName": "주간",
+        "shiftName": "1조",
         "lineId": 1,
         "lineCode": "A",
         "lineName": "A라인"
@@ -312,11 +388,16 @@ Response:
 }
 ```
 
+---
+
 ### 계정 상세 조회
 
-`GET /api/admin/accounts/{userId}`
+```
+GET /api/admin/accounts/{userId}
+Authorization: Bearer {accessToken}
+```
 
-Response:
+**Response (200)**
 
 ```json
 {
@@ -330,37 +411,59 @@ Response:
     "role": "WORKER",
     "status": "ACTIVE",
     "shiftId": 1,
-    "shiftName": "주간",
+    "shiftName": "1조",
     "lineId": 1,
     "lineCode": "A",
     "lineName": "A라인",
     "email": "worker01@example.com",
     "phone": "010-1234-5678",
-    "passwordChangeRequired": true
+    "passwordChangeRequired": false
   }
 }
 ```
 
+**Error**
+
+| code | 상황 |
+|---|---|
+| `USER_NOT_FOUND` | 존재하지 않는 userId |
+
+---
+
 ### 계정 수정
 
-`PUT /api/admin/accounts/{userId}`
+```
+PUT /api/admin/accounts/{userId}
+Authorization: Bearer {accessToken}
+```
 
-Request:
+**Request Body**
+
+| 필드 | 타입 | 필수 | 제약 |
+|---|---|---|---|
+| `userName` | string | Y | 최대 100자 |
+| `loginId` | string | Y | 최대 50자 |
+| `role` | string | Y | `ADMIN` 또는 `WORKER` |
+| `status` | string | Y | `ACTIVE`, `INACTIVE`, `PENDING` |
+| `shiftId` | number | WORKER 필수 | ADMIN은 nullable |
+| `lineId` | number | WORKER 필수 | ADMIN은 nullable |
+| `email` | string | N | 이메일 형식, 최대 100자 |
+| `phone` | string | N | 최대 20자 |
 
 ```json
 {
   "userName": "홍길동",
   "loginId": "worker01",
   "role": "WORKER",
+  "status": "ACTIVE",
   "shiftId": 2,
   "lineId": 2,
-  "status": "ACTIVE",
   "email": "worker01@example.com",
   "phone": "010-9999-8888"
 }
 ```
 
-Response:
+**Response (200)**
 
 ```json
 {
@@ -374,22 +477,43 @@ Response:
     "role": "WORKER",
     "status": "ACTIVE",
     "shiftId": 2,
-    "shiftName": "오후",
+    "shiftName": "2조",
     "lineId": 2,
     "lineCode": "B",
     "lineName": "B라인",
     "email": "worker01@example.com",
     "phone": "010-9999-8888",
-    "passwordChangeRequired": true
+    "passwordChangeRequired": false
   }
 }
 ```
 
+**Error**
+
+| code | 상황 |
+|---|---|
+| `USER_NOT_FOUND` | 존재하지 않는 userId |
+| `DUPLICATE_LOGIN_ID` | 변경하려는 loginId가 다른 계정에서 사용 중 |
+| `DUPLICATE_EMAIL` | 변경하려는 이메일이 다른 계정에서 사용 중 |
+| `SHIFT_REQUIRED_FOR_WORKER` | WORKER인데 shiftId 없음 |
+| `LINE_REQUIRED_FOR_WORKER` | WORKER인데 lineId 없음 |
+
+---
+
 ### 계정 상태 변경
 
-`PATCH /api/admin/accounts/{userId}/status`
+계정의 상태만 단독으로 변경할 때 사용한다.
 
-Request:
+```
+PATCH /api/admin/accounts/{userId}/status
+Authorization: Bearer {accessToken}
+```
+
+**Request Body**
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `status` | string | Y | `ACTIVE`, `INACTIVE`, `PENDING` |
 
 ```json
 {
@@ -397,7 +521,7 @@ Request:
 }
 ```
 
-Response:
+**Response (200)**
 
 ```json
 {
@@ -405,136 +529,20 @@ Response:
   "message": "계정 상태가 변경되었습니다.",
   "data": {
     "userId": 1,
+    "employeeId": "550e8400-e29b-41d4-a716-446655440000",
     "userName": "홍길동",
     "loginId": "worker01",
     "role": "WORKER",
     "status": "INACTIVE",
-    "shiftId": 2,
-    "shiftName": "오후",
-    "lineId": 2,
-    "lineCode": "B",
-    "lineName": "B라인",
-    "email": "worker01@example.com",
-    "phone": "010-9999-8888",
-    "passwordChangeRequired": true
-  }
-}
-```
-
----
-
-## User API
-
-### 사용자 목록 조회
-
-`GET /api/users`
-
-Response:
-
-```json
-{
-  "success": true,
-  "message": "사용자 목록 조회 성공",
-  "data": [
-    {
-      "userId": 1,
-      "employeeId": "550e8400-e29b-41d4-a716-446655440000",
-      "userName": "홍길동",
-      "email": "worker01@example.com",
-      "role": "WORKER",
-      "shiftId": 1,
-      "shiftName": "주간",
-      "lineId": 1,
-      "lineCode": "A",
-      "lineName": "A라인",
-      "status": "ACTIVE"
-    }
-  ]
-}
-```
-
-### 사용자 상세 조회
-
-`GET /api/users/{userId}`
-
-Response:
-
-```json
-{
-  "success": true,
-  "message": "사용자 조회 성공",
-  "data": {
-    "userId": 1,
-    "employeeId": "550e8400-e29b-41d4-a716-446655440000",
-    "userName": "홍길동",
+    "shiftId": 1,
+    "shiftName": "1조",
+    "lineId": 1,
+    "lineCode": "A",
+    "lineName": "A라인",
     "email": "worker01@example.com",
     "phone": "010-1234-5678",
-    "role": "WORKER",
-    "shiftId": 1,
-    "shiftName": "주간",
-    "lineId": 1,
-    "lineCode": "A",
-    "lineName": "A라인",
-    "status": "ACTIVE",
-    "createdAt": "2026-04-11T04:00:00",
-    "updatedAt": "2026-04-11T04:00:00"
+    "passwordChangeRequired": false
   }
-}
-```
-
-### 사용자 수정
-
-`PUT /api/users/{userId}`
-
-Request:
-
-```json
-{
-  "userName": "홍길동",
-  "phone": "010-9999-8888",
-  "role": "WORKER",
-  "shiftId": 1,
-  "lineId": 1,
-  "status": "ACTIVE"
-}
-```
-
-Response:
-
-```json
-{
-  "success": true,
-  "message": "사용자 정보가 수정되었습니다.",
-  "data": {
-    "userId": 1,
-    "employeeId": "550e8400-e29b-41d4-a716-446655440000",
-    "userName": "홍길동",
-    "email": "worker01@example.com",
-    "phone": "010-9999-8888",
-    "role": "WORKER",
-    "shiftId": 1,
-    "shiftName": "주간",
-    "lineId": 1,
-    "lineCode": "A",
-    "lineName": "A라인",
-    "status": "ACTIVE",
-    "createdAt": "2026-04-11T04:00:00",
-    "updatedAt": "2026-04-11T04:05:00"
-  }
-}
-```
-
-### 사용자 삭제
-
-`DELETE /api/users/{userId}`
-
-Response:
-
-```json
-{
-  "success": true,
-  "message": "사용자가 삭제되었습니다.",
-  "data": null
 }
 ```
 
@@ -542,44 +550,41 @@ Response:
 
 ## Line API
 
+> 로그인된 사용자(ADMIN, WORKER) 모두 접근 가능.
+
 ### 라인 목록 조회
 
-`GET /api/lines`
+계정 생성/수정 폼의 라인 선택 드롭다운에 사용한다. 앱 시작 시 A, B, C 3개가 자동 삽입된다.
 
-Response:
+```
+GET /api/lines
+Authorization: Bearer {accessToken}
+```
+
+**Response (200)**
 
 ```json
 {
   "success": true,
   "message": "라인 목록 조회 성공",
   "data": [
-    {
-      "lineId": 1,
-      "lineCode": "A",
-      "lineName": "A라인",
-      "isActive": true
-    },
-    {
-      "lineId": 2,
-      "lineCode": "B",
-      "lineName": "B라인",
-      "isActive": true
-    },
-    {
-      "lineId": 3,
-      "lineCode": "C",
-      "lineName": "C라인",
-      "isActive": true
-    }
+    { "lineId": 1, "lineCode": "A", "lineName": "A라인", "isActive": true },
+    { "lineId": 2, "lineCode": "B", "lineName": "B라인", "isActive": true },
+    { "lineId": 3, "lineCode": "C", "lineName": "C라인", "isActive": true }
   ]
 }
 ```
 
+---
+
 ### 라인 상세 조회
 
-`GET /api/lines/{lineId}`
+```
+GET /api/lines/{lineId}
+Authorization: Bearer {accessToken}
+```
 
-Response:
+**Response (200)**
 
 ```json
 {
@@ -598,27 +603,18 @@ Response:
 
 ## Shift API
 
-### 교대조 생성
-
-`POST /api/shifts`
-
-Request:
-
-```json
-{
-  "shiftType": "DAY",
-  "shiftName": "주간",
-  "startTime": "09:00:00",
-  "endTime": "18:00:00",
-  "shiftOrder": 1
-}
-```
+> 로그인된 사용자(ADMIN, WORKER) 모두 접근 가능.
 
 ### 교대조 목록 조회
 
-`GET /api/shifts`
+계정 생성/수정 폼의 교대조 선택 드롭다운에 사용한다.
 
-Response:
+```
+GET /api/shifts
+Authorization: Bearer {accessToken}
+```
+
+**Response (200)**
 
 ```json
 {
@@ -628,139 +624,57 @@ Response:
     {
       "shiftId": 1,
       "shiftType": "DAY",
-      "shiftName": "주간",
+      "shiftName": "1조",
       "startTime": "09:00:00",
       "endTime": "18:00:00",
       "shiftOrder": 1,
+      "isActive": true
+    },
+    {
+      "shiftId": 2,
+      "shiftType": "EVENING",
+      "shiftName": "2조",
+      "startTime": "18:00:00",
+      "endTime": "03:00:00",
+      "shiftOrder": 2,
+      "isActive": true
+    },
+    {
+      "shiftId": 3,
+      "shiftType": "NIGHT",
+      "shiftName": "3조",
+      "startTime": "00:00:00",
+      "endTime": "09:00:00",
+      "shiftOrder": 3,
       "isActive": true
     }
   ]
 }
 ```
 
+---
+
 ### 교대조 상세 조회
 
-`GET /api/shifts/{shiftId}`
-
-### 교대조 수정
-
-`PUT /api/shifts/{shiftId}`
-
-Request:
-
-```json
-{
-  "shiftName": "주간",
-  "startTime": "09:00:00",
-  "endTime": "18:00:00",
-  "shiftOrder": 1
-}
+```
+GET /api/shifts/{shiftId}
+Authorization: Bearer {accessToken}
 ```
 
-### 교대조 비활성화
 
-`DELETE /api/shifts/{shiftId}`
+### WORKER / ADMIN 역할별 필수 필드
 
-### 날짜별 교대 배정
+| 필드 | WORKER | ADMIN |
+|---|---|---|
+| `shiftId` | 필수 | 선택 |
+| `lineId` | 필수 | 선택 |
+| `email` | 선택 | 선택 |
+| `phone` | 선택 | 선택 |
 
-`POST /api/shifts/assignments`
+### 계정 상태 값 표시
 
-Request:
-
-```json
-{
-  "userId": 1,
-  "shiftId": 1,
-  "workDate": "2026-04-11"
-}
-```
-
-Response:
-
-```json
-{
-  "success": true,
-  "message": "교대 배정이 완료되었습니다.",
-  "data": {
-    "assignmentId": 1,
-    "userId": 1,
-    "userName": "홍길동",
-    "shiftId": 1,
-    "shiftName": "주간",
-    "shiftType": "DAY",
-    "workDate": "2026-04-11"
-  }
-}
-```
-
-### 날짜별 교대표 조회
-
-`GET /api/shifts/assignments?date=2026-04-11`
-
-### 사용자별 배정 이력 조회
-
-`GET /api/shifts/assignments/users/{userId}`
-
----
-
-## 프론트 연동 체크리스트
-
-계정 생성/수정 화면 진입 시 먼저 기준정보를 조회한다.
-
-- `GET /api/lines`
-- `GET /api/shifts`
-
-계정 생성 폼 필드:
-
-- `userName`
-- `loginId`
-- `password`
-- `confirmPassword`
-- `role`
-- `shiftId`
-- `lineId`
-- `email`
-- `phone`
-
-계정 수정 폼 필드:
-
-- `userName`
-- `loginId`
-- `role`
-- `shiftId`
-- `lineId`
-- `status`
-- `email`
-- `phone`
-
-계정 목록 테이블 권장 컬럼:
-
-- 이름
-- 로그인 ID
-- 역할
-- 상태
-- 근무조
-- 생산라인
-
----
-
-## 테스트 시나리오
-
-- `WORKER` 계정 생성 시 `shiftId`가 없으면 실패한다.
-- `WORKER` 계정 생성 시 `lineId`가 없으면 실패한다.
-- `ADMIN` 계정 생성 시 `shiftId`, `lineId`가 없어도 성공한다.
-- 중복 `loginId`로 계정 생성 시 실패한다.
-- 비밀번호와 비밀번호 확인이 다르면 실패한다.
-- `GET /api/lines`는 `A`, `B`, `C` 라인을 내려준다.
-- `GET /api/auth/me`는 `lineId`, `lineCode`, `lineName`을 내려준다.
-- `GET /api/admin/accounts`는 계정 목록 item에 `lineId`, `lineCode`, `lineName`을 포함한다.
-- `GET /api/users/{userId}`는 사용자 상세에 `shift`, `line` 정보를 모두 포함한다.
-
----
-
-## 현재 열린 항목
-
-- `shift` 초기 데이터 seed 방식 확정
-- 운영 DB migration 전략 확정
-- 역할별 API 접근 권한 세분화 검토
-- `inspection` 도메인 추가 후 `line`, `shift`, `user` 연결 방식 검토
+| status | 표시 |
+|---|---|
+| `ACTIVE` | 활성 |
+| `INACTIVE` | 비활성 |
+| `PENDING` | 승인 대기 |
