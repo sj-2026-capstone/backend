@@ -36,6 +36,9 @@ public enum ErrorCode {
     INSPECTION_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 검사입니다."),
     INVALID_INSPECTION_STATUS(HttpStatus.BAD_REQUEST, "현재 상태에서 허용되지 않는 작업입니다."),
 
+    // Analysis
+    ANALYSIS_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 분석 결과입니다."),
+
     // Common
     FORBIDDEN(HttpStatus.FORBIDDEN, "접근 권한이 없습니다.");
 

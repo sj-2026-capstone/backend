@@ -21,11 +21,13 @@ import com.sjcapstone.global.client.AiAnalysisClient;
 import com.sjcapstone.global.exception.CustomException;
 import com.sjcapstone.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -51,7 +53,7 @@ public class InspectionServiceImpl implements InspectionService {
         try {
             aiAnalysisClient.requestAnalysis(inspection.getId(), inspection.getImageUrl());
         } catch (Exception e) {
-            inspection.fail("AI 분석 요청 실패: " + e.getMessage());
+            log.warn("AI 분석 요청 실패 — inspectionId={}, error={}", inspection.getId(), e.getMessage());
         }
 
         return InspectionResponse.from(inspection);
@@ -162,7 +164,7 @@ public class InspectionServiceImpl implements InspectionService {
         try {
             aiAnalysisClient.requestAnalysis(inspection.getId(), inspection.getImageUrl());
         } catch (Exception e) {
-            inspection.fail("AI 분석 요청 실패: " + e.getMessage());
+            log.warn("AI 분석 요청 실패 — inspectionId={}, error={}", inspectionId, e.getMessage());
         }
         return InspectionResponse.from(inspection);
     }

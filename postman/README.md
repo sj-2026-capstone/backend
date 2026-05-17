@@ -7,6 +7,10 @@
 
 기본 `baseUrl`은 `http://localhost:8080` 입니다.
 
+API가 추가/변경되어 collection 파일을 갱신한 경우에는 Postman에서
+`postman/capstone-api.postman_collection.json`을 다시 import 한 뒤 기존
+`Capstone API` collection을 replace/update 하면 됩니다.
+
 ## 추천 확인 순서
 
 1. Spring 서버 실행
@@ -16,6 +20,9 @@
 5. 이후 필요한 도메인 API 실행
 
 `Auth > Login` 요청이 성공하면 `accessToken`이 컬렉션 변수에 자동 저장되어 이후 요청의 `Authorization: Bearer {{accessToken}}`에 재사용됩니다.
+
+`Internal` 폴더의 요청은 JWT 대신 `X-Service-Key: {{serviceKey}}` 헤더를 사용합니다.
+이미지 업로드 요청은 `imageFilePath` 변수에 로컬 이미지 경로를 넣거나 Postman form-data에서 파일을 직접 선택하면 됩니다.
 
 ## 현재 코드 기준 주의사항
 

@@ -127,21 +127,30 @@
 
 ### 6. 공정 개선 분석 (Analysis)
 
-| 기능 | 주체 |
-|---|---|
-| AI 자율 공정 분석 요청 | ADMIN |
-| 공정 개선 분석 목록 조회 | ADMIN |
-| 공정 개선 분석 상세 조회 | ADMIN |
+| 기능 | 주체 | 엔드포인트 |
+|---|---|---|
+| AI 자율 공정 분석 시작 | ADMIN | `POST /api/analysis` |
+| 공정 개선 분석 목록 조회 (페이징) | ADMIN | `GET /api/analysis?page=&size=` |
+| 최신 분석 결과 조회 | ADMIN | `GET /api/analysis/latest` |
+| 공정 개선 분석 상세 조회 | ADMIN | `GET /api/analysis/{analysisId}` |
+| 공정 분석 완료 콜백 수신 | AI 분석 서버 | `POST /internal/analysis-callbacks/{analysisId}` |
 
-> **비동기 처리 흐름**: 요청 → AI 서버 처리 → 결과 저장 → 조회  
-> `inspection`과 연결되지만, 목적과 생명주기가 달라 **독립 도메인**으로 분리.
+> - **비동기 처리 흐름**: `POST /api/analysis` → AI 서버 `/process-analyze` 호출 → AI 서버가 `POST /internal/analysis-callbacks/{id}`로 결과 콜백 → DB 저장 → `GET /api/analysis/latest`로 조회
+> - `inspection`과 연결되지만 목적·생명주기가 달라 **독립 도메인**으로 분리
+> - 상태 머신: `PENDING → PROCESSING → DONE / FAILED`
+> - 결과는 `patterns`(발견된 패턴 목록)와 `recommendations`(추천 조치 목록)로 구성 — DB에 JSON TEXT로 저장
+> - `SeverityLevel`: `HIGH`(높음) / `MEDIUM`(중간) / `LOW`(관찰)
+> - **AI 서버 엔드포인트 미확정**: 현재 `/process-analyze`로 임시 지정 — AI 서버 스펙 확정 후 `AiAnalysisClient.requestProcessAnalysis()` URL 수정 필요
+> - AI 서버 요청 페이로드: `{ analysisId, callbackUrl }`
+> - AI 서버 콜백 페이로드: `{ patterns: [{title, description, severity}], recommendations: [{title, description}] }`
 
 ### 7. 내부 시스템 연동 API (Internal)
 
-| 기능 | 주체 |
-|---|---|
-| 프레임 수집 API | 카메라/엣지 디바이스 → 백엔드 |
-| 분석 완료 콜백 API | AI 서버 → 백엔드 |
+| 기능 | 주체 | 엔드포인트 |
+|---|---|---|
+| 프레임 수집 API | 카메라/엣지 디바이스 → 백엔드 | `POST /internal/frames` |
+| 검사 분석 완료 콜백 API | AI 서버 → 백엔드 | `POST /internal/callbacks/{inspectionId}` |
+| 공정 분석 완료 콜백 API | AI 서버 → 백엔드 | `POST /internal/analysis-callbacks/{analysisId}` |
 
 > 사용자 JWT 아님. `/internal/**` prefix로 분리, 별도 Security Filter Chain 적용.
 
@@ -305,14 +314,37 @@ src/main/java/com/sjcapstone/
 │   │       └── projection/
 │   │           ├── DailyDefectStatsProjection.java
 │   │           └── LineDefectStatsProjection.java
-│   └── analysis/              # AI 공정 개선 분석 요청/결과 관리 — 예정
+│   └── analysis/              # AI 공정 개선 분석 요청/결과 관리 — 완료
+│       ├── controller/
+│       │   └── AnalysisController.java
+│       ├── service/
+│       │   ├── AnalysisService.java
+│       │   └── AnalysisServiceImpl.java
+│       ├── repository/
+│       │   └── AnalysisRepository.java
+│       ├── entity/
+│       │   ├── ProcessAnalysis.java
+│       │   ├── AnalysisStatus.java  (enum: PENDING/PROCESSING/DONE/FAILED)
+│       │   └── SeverityLevel.java   (enum: HIGH/MEDIUM/LOW)
+│       ├── dto/
+│       │   ├── PatternDto.java
+│       │   ├── RecommendationDto.java
+│       │   ├── ProcessAnalysisCallbackRequest.java
+│       │   ├── AnalysisStartResponse.java
+│       │   ├── AnalysisResponse.java
+│       │   ├── AnalysisListItemResponse.java
+│       │   └── AnalysisPageResponse.java
+│       └── exception/
+│           └── AnalysisNotFoundException.java
 ├── internal/                  # 내부 시스템 전용 API (별도 보안 채널)
 │   ├── frame/                 # 프레임 수집 (카메라/엣지 디바이스) — 완료
 │   │   └── InternalFrameController.java
-│   └── callback/              # 분석 완료 콜백 (AI 서버) — 완료
-│       ├── InternalCallbackController.java
-│       └── dto/
-│           └── AnalysisCallbackRequest.java
+│   ├── callback/              # 검사 분석 완료 콜백 (AI 서버) — 완료
+│   │   ├── InternalCallbackController.java
+│   │   └── dto/
+│   │       └── AnalysisCallbackRequest.java
+│   └── analysis/              # 공정 분석 완료 콜백 (AI 서버) — 완료
+│       └── InternalAnalysisCallbackController.java
 └── global/
     ├── config/
     │   ├── JpaAuditingConfig.java
@@ -322,8 +354,9 @@ src/main/java/com/sjcapstone/
     │   ├── AdminDataInitializer.java
     │   └── LineDataInitializer.java # ApplicationRunner — A/B/C 라인 seed 데이터
     ├── client/
-    │   ├── AiAnalysisClient.java    # AI 서버 HTTP 호출 (POST /analyze)
-    │   └── AiAnalysisRequest.java   # AI 서버 요청 DTO { inspectionId, imageUrl, callbackUrl }
+    │   ├── AiAnalysisClient.java    # AI 서버 HTTP 호출 (POST /analyze, POST /process-analyze)
+    │   ├── AiAnalysisRequest.java   # 검사 분석 요청 DTO { inspectionId, imageUrl, callbackUrl }
+    │   └── AiProcessAnalysisRequest.java  # 공정 분석 요청 DTO { analysisId, callbackUrl }
     ├── entity/
     │   └── BaseEntity.java          # createdAt, updatedAt (JPA Auditing)
     ├── exception/
@@ -367,8 +400,9 @@ src/main/java/com/sjcapstone/
 /api/dashboard/**          → 대시보드 통계 (ADMIN 전용)
 /api/analysis/**           → 공정 개선 분석 (ADMIN 전용)
 
-/internal/frames/**        → 프레임 수집 (내부 서비스 키)
-/internal/callbacks/**     → AI 분석 콜백 (내부 서비스 키)
+/internal/frames/**                  → 프레임 수집 (내부 서비스 키)
+/internal/callbacks/**               → 검사 AI 분석 콜백 (내부 서비스 키)
+/internal/analysis-callbacks/**      → 공정 분석 콜백 (내부 서비스 키)
 ```
 
 ---
@@ -456,9 +490,14 @@ src/main/java/com/sjcapstone/
 - `InspectionRepository`에 native query 추가 (`findDailyDefectStatsSince`, `findLineDefectStats`)
 - `actionSummary`는 현재 stub (0값) — 향후 `DefectAction`/`InspectionAction` 도메인 추가 필요
 
-### Analysis (공정 개선 분석) — 예정
-- AI 분석 서버에 누적 검사 데이터 기반 LLM 리포트 요청
-- 비동기 처리: 요청 → AI 서버 처리 → 콜백 → 결과 저장 → 조회
+### Analysis (공정 개선 분석)
+- `process_analyses` 테이블, `BaseEntity` 상속 (createdAt, updatedAt)
+- 상태 머신: `PENDING → PROCESSING → DONE / FAILED`
+- `patterns`(JSON TEXT), `recommendations`(JSON TEXT) — Jackson ObjectMapper로 직렬화/역직렬화
+- 비동기 처리 흐름: `POST /api/analysis` → `ProcessAnalysis` 저장(PENDING) → AI 서버 `/process-analyze` 호출(PROCESSING) → AI 서버가 `/internal/analysis-callbacks/{id}` 콜백 → `complete()` 호출(DONE) → 조회
+- AI 요청 실패 시 `fail()` 호출, 상태 FAILED (예외 전파 없음)
+- `AnalysisRepository.findTopByOrderByCreatedAtDesc()` — `GET /api/analysis/latest`용
+- **AI 서버 엔드포인트 미확정**: `AiAnalysisClient.requestProcessAnalysis()`에서 `/process-analyze` 임시 사용 — 확정 후 교체
 
 ---
 
@@ -475,6 +514,7 @@ src/main/java/com/sjcapstone/
 - `POST /api/auth/login` — 인증 없이 접근 허용 (로그인만 공개, `/api/auth/**` 전체 공개 아님)
 - `/api/admin/**` — `ADMIN` 권한 필요 (`hasRole("ADMIN")`)
 - `/api/dashboard/**` — `ADMIN` 권한 필요 (`hasRole("ADMIN")`)
+- `/api/analysis/**` — `ADMIN` 권한 필요 (`hasRole("ADMIN")`)
 - 나머지 모든 엔드포인트 — JWT 필요
 
 ---
@@ -601,8 +641,8 @@ app.base-url=https://your-backend-ngrok-url.ngrok.io
 | inspection — entity, 상태 머신, CRUD, 분석 시작, AI 서버 HTTP 호출, 콜백 수신 | 완료 |
 | global/client — AiAnalysisClient (RestTemplate 기반 AI 서버 연동) | 완료 |
 | dashboard — GET /api/dashboard, 집계 쿼리 (요약/추이/라인별), projection | 완료 |
-| analysis | 예정 |
-| internal (frame 수집, AI 콜백) | 완료 |
+| analysis — entity, 상태 머신, CRUD, AI 서버 연동, 콜백 수신, JSON 직렬화 | 완료 |
+| internal (frame 수집, 검사 AI 콜백, 공정 분석 콜백) | 완료 |
 
 ---
 
@@ -614,6 +654,7 @@ app.base-url=https://your-backend-ngrok-url.ngrok.io
 | 내부 시스템 인증 방식 | API Key 정적 관리 vs 서비스 토큰 발급 방식 결정 필요 |
 | 검사 상태 머신 정의 | `PENDING → PROCESSING → DONE/FAILED` 전환 규칙 명확화 |
 | AI 분석 서버 연동 방식 | RestTemplate 동기 HTTP 호출로 구현 완료. `@Transactional` 범위 안에서 HTTP 호출이 실행되어 AI 응답 대기 중 DB 커넥션이 점유됨 — 트래픽 증가 시 커넥션 풀 고갈 위험, 비동기 메시지 큐 전환 검토 필요 |
+| 공정 분석 AI 서버 엔드포인트 | AI 서버의 공정 분석 API 경로 미확정 — 현재 `/process-analyze` 임시 사용. 확정 후 `AiAnalysisClient.requestProcessAnalysis()` URL 수정 필요 |
 | dashboard actionSummary | 조치 도메인 미구현 — `DefectAction`/`InspectionAction` 추가 후 실제 집계로 교체 필요 |
 | dashboard 데이터 정합성 | 현재 실시간 집계 쿼리 — 데이터 증가 시 Redis 캐싱 여부 검토 필요 |
 | inspection과 frame의 관계 | 프레임을 inspection 하위로 볼지, 독립 엔티티로 볼지 |

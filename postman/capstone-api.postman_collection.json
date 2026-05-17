@@ -67,6 +67,18 @@
     {
       "key": "workDate",
       "value": "2026-05-04"
+    },
+    {
+      "key": "analysisId",
+      "value": "1"
+    },
+    {
+      "key": "serviceKey",
+      "value": "d74d235b1bbe0b3e49f53d7a9cca2766704abb1d2e1892b818f1217690ebc933"
+    },
+    {
+      "key": "imageFilePath",
+      "value": ""
     }
   ],
   "item": [
@@ -873,6 +885,247 @@
                 "{{inspectionId}}",
                 "analyze"
               ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Get Dashboard",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/dashboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "dashboard"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Analysis",
+      "item": [
+        {
+          "name": "Start Process Analysis",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/analysis",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "analysis"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Analysis List",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/analysis?page=0&size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "analysis"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Latest Analysis",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/analysis/latest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "analysis",
+                "latest"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Analysis Detail",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/analysis/{{analysisId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "analysis",
+                "{{analysisId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin Images",
+      "item": [
+        {
+          "name": "Upload Image",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "{{imageFilePath}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/images",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "images"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Internal",
+      "item": [
+        {
+          "name": "Upload Frame",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{serviceKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lineId\": {{lineId}},\n  \"workerId\": {{workerUserId}},\n  \"shiftId\": {{shiftId}},\n  \"imageUrl\": \"https://example.com/test-image.jpg\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/internal/frames",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "internal",
+                "frames"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Inspection Analysis Callback",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{serviceKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hasDefect\": true,\n  \"defectType\": \"SCRATCH\",\n  \"resultNote\": \"불량이 감지되었습니다.\",\n  \"gradCamImageUrl\": \"https://example.com/gradcam.jpg\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/internal/callbacks/{{inspectionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "internal",
+                "callbacks",
+                "{{inspectionId}}"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Process Analysis Callback",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Key",
+                "value": "{{serviceKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patterns\": [\n    {\n      \"title\": \"야간조 불량률 증가\",\n      \"description\": \"최근 야간조에서 불량률이 상승했습니다.\",\n      \"severity\": \"HIGH\"\n    }\n  ],\n  \"recommendations\": [\n    {\n      \"title\": \"설비 점검 강화\",\n      \"description\": \"야간조 시작 전 설비 점검 체크리스트를 추가하세요.\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/internal/analysis-callbacks/{{analysisId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "internal",
+                "analysis-callbacks",
+                "{{analysisId}}"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
             }
           }
         }

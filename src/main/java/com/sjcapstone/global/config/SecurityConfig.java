@@ -35,7 +35,7 @@ public class SecurityConfig {
     @Order(1)
     public SecurityFilterChain internalFilterChain(HttpSecurity http) throws Exception {
         http
-                .securityMatcher("/internal/**")
+                .securityMatcher("/internal/**", "/images/**")
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .sessionManagement(session ->
@@ -59,8 +59,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/login").permitAll()
                         .requestMatchers("/internal/**").permitAll()
+                        .requestMatchers("/images/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/dashboard/**").hasRole("ADMIN")
+                        .requestMatchers("/api/analysis/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
