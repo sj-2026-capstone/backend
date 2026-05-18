@@ -22,7 +22,7 @@ public class AiAnalysisClient {
     public void requestAnalysis(Long inspectionId, String imageUrl) {
         String callbackUrl = appBaseUrl + "/internal/callbacks/" + inspectionId;
 
-        AiAnalysisRequest request = new AiAnalysisRequest(String.valueOf(inspectionId), imageUrl, callbackUrl);
+        AiAnalysisRequest request = new AiAnalysisRequest(String.valueOf(inspectionId), appBaseUrl + imageUrl, callbackUrl);
 
         try {
             restTemplate.postForObject(aiServerUrl + "/analyze", request, Void.class);

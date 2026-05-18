@@ -24,9 +24,6 @@ public class ImageUploadController {
     @Value("${file.upload-dir}")
     private String uploadDir;
 
-    @Value("${app.base-url}")
-    private String baseUrl;
-
     @PostMapping
     public ResponseEntity<CommonResponse<ImageUploadResponse>> upload(
             @RequestParam("file") MultipartFile file) throws IOException {
@@ -40,7 +37,7 @@ public class ImageUploadController {
         String filename = UUID.randomUUID() + ext;
         Files.copy(file.getInputStream(), dir.resolve(filename));
 
-        String imageUrl = baseUrl + "/images/" + filename;
+        String imageUrl = "/images/" + filename;
         return ResponseEntity.ok(CommonResponse.ok("이미지 업로드 성공", new ImageUploadResponse(imageUrl)));
     }
 

@@ -12,13 +12,10 @@ import java.util.UUID;
 public class FileStorageService {
 
     private final Path uploadPath;
-    private final String baseUrl;
 
     public FileStorageService(
-            @Value("${file.upload-dir}") String uploadDir,
-            @Value("${app.base-url}") String baseUrl) {
+            @Value("${file.upload-dir}") String uploadDir) {
         this.uploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
-        this.baseUrl = baseUrl;
         try {
             Files.createDirectories(this.uploadPath);
         } catch (IOException e) {
@@ -41,6 +38,6 @@ public class FileStorageService {
             throw new RuntimeException("파일 저장 실패", e);
         }
 
-        return baseUrl + "/images/" + filename;
+        return "/images/" + filename;
     }
 }

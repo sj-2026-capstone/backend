@@ -35,7 +35,7 @@ public class SecurityConfig {
     @Order(1)
     public SecurityFilterChain internalFilterChain(HttpSecurity http) throws Exception {
         http
-                .securityMatcher("/internal/**", "/images/**")
+                .securityMatcher("/internal/**")
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .sessionManagement(session ->
