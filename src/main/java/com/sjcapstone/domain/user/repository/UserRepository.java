@@ -30,6 +30,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     List<User> findAllByRoleAndDeletedAtIsNull(UserRole role);
 
+    Optional<User> findFirstByLine_IdAndRoleAndStatusAndDeletedAtIsNull(Long lineId, UserRole role, UserStatus status);
+
     List<User> findAllByStatusAndDeletedAtIsNull(UserStatus status);
 
     long countByDeletedAtIsNull();

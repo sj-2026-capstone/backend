@@ -1,6 +1,5 @@
 package com.sjcapstone.internal.callback.dto;
 
-import com.sjcapstone.domain.inspection.entity.DefectType;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -9,12 +8,17 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class AnalysisCallbackRequest {
 
-    @NotNull(message = "불량 여부는 필수입니다.")
-    private Boolean hasDefect;
-
-    private DefectType defectType;
-
-    private String resultNote;
+    @NotNull(message = "예측 결과는 필수입니다.")
+    private String prediction;  // "NORMAL" or "DEFECT"
 
     private String gradCamImageUrl;
+
+    public boolean isDefect() {
+        return "DEFECT".equalsIgnoreCase(prediction);
+    }
+
+    public String getNormalizedGradCamImageUrl() {
+        if (gradCamImageUrl == null) return null;
+        return gradCamImageUrl.replace("grad_cam-images/", "grad_cam_images/");
+    }
 }

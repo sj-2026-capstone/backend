@@ -23,6 +23,13 @@ public interface InspectionRepository extends JpaRepository<Inspection, Long> {
 
     Page<Inspection> findAllByLineIdAndStatusOrderByCreatedAtDesc(Long lineId, InspectionStatus status, Pageable pageable);
 
+    List<Inspection> findTop5ByHasDefectTrueAndStatusOrderByInspectedAtDesc(InspectionStatus status);
+
+    @Query("SELECT i FROM Inspection i LEFT JOIN FETCH i.line LEFT JOIN FETCH i.shift " +
+           "WHERE i.status = :status AND i.createdAt >= :after ORDER BY i.createdAt DESC")
+    List<Inspection> findDoneInspectionsForAnalysis(@Param("status") InspectionStatus status,
+                                                    @Param("after") LocalDateTime after);
+
     // 대시보드 집계 쿼리
 
     long countByHasDefectTrue();

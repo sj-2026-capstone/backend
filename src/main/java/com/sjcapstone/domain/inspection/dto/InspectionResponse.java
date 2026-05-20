@@ -1,5 +1,6 @@
 package com.sjcapstone.domain.inspection.dto;
 
+import com.sjcapstone.domain.inspection.entity.ActionStatus;
 import com.sjcapstone.domain.inspection.entity.DefectType;
 import com.sjcapstone.domain.inspection.entity.Inspection;
 import com.sjcapstone.domain.inspection.entity.InspectionStatus;
@@ -23,9 +24,9 @@ public class InspectionResponse {
     private DefectType defectType;
     private String defectDisplayName;
     private Boolean hasDefect;
+    private ActionStatus actionStatus;
     private String imageUrl;
     private String gradCamImageUrl;
-    private String resultNote;
     private LocalDateTime inspectedAt;
     private LocalDateTime createdAt;
 
@@ -40,9 +41,9 @@ public class InspectionResponse {
                 .defectType(inspection.getDefectType())
                 .defectDisplayName(inspection.getDefectType() != null ? inspection.getDefectType().getDisplayName() : null)
                 .hasDefect(inspection.getHasDefect())
+                .actionStatus(inspection.getActionStatus())
                 .imageUrl(inspection.getImageUrl())
                 .gradCamImageUrl(inspection.getGradCamImageUrl())
-                .resultNote(inspection.getResultNote())
                 .inspectedAt(inspection.getInspectedAt())
                 .createdAt(inspection.getCreatedAt())
                 .build();

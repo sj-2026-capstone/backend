@@ -1,7 +1,7 @@
 package com.sjcapstone.domain.inspection.service;
 
 import com.sjcapstone.domain.inspection.dto.*;
-import com.sjcapstone.domain.inspection.entity.DefectType;
+import java.util.List;
 import com.sjcapstone.domain.inspection.entity.InspectionStatus;
 import com.sjcapstone.domain.user.entity.UserRole;
 import org.springframework.data.domain.Pageable;
@@ -20,5 +20,9 @@ public interface InspectionService {
 
     InspectionResponse startAnalysis(Long inspectionId, Long userId, UserRole role);
 
-    void processAnalysisCallback(Long inspectionId, boolean hasDefect, DefectType defectType, String resultNote, String gradCamImageUrl);
+    void processAnalysisCallback(Long inspectionId, boolean hasDefect, String gradCamImageUrl);
+
+    void resolveAction(Long inspectionId, Long userId, UserRole role);
+
+    List<RecentDefectResponse> getRecentDefects();
 }

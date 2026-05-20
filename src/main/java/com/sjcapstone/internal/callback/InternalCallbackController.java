@@ -23,10 +23,8 @@ public class InternalCallbackController {
 
         inspectionService.processAnalysisCallback(
                 inspectionId,
-                request.getHasDefect(),
-                request.getDefectType(),
-                request.getResultNote(),
-                request.getGradCamImageUrl()
+                request.isDefect(),
+                request.getNormalizedGradCamImageUrl()
         );
         return ResponseEntity.ok(CommonResponse.ok("분석 결과가 처리되었습니다."));
     }

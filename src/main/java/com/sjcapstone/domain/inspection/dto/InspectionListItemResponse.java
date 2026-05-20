@@ -1,5 +1,6 @@
 package com.sjcapstone.domain.inspection.dto;
 
+import com.sjcapstone.domain.inspection.entity.ActionStatus;
 import com.sjcapstone.domain.inspection.entity.DefectType;
 import com.sjcapstone.domain.inspection.entity.Inspection;
 import com.sjcapstone.domain.inspection.entity.InspectionStatus;
@@ -23,6 +24,7 @@ public class InspectionListItemResponse {
     private DefectType defectType;
     private String defectDisplayName;
     private Boolean hasDefect;
+    private ActionStatus actionStatus;
     private LocalDateTime inspectedAt;
     private LocalDateTime createdAt;
 
@@ -37,6 +39,7 @@ public class InspectionListItemResponse {
                 .defectType(inspection.getDefectType())
                 .defectDisplayName(inspection.getDefectType() != null ? inspection.getDefectType().getDisplayName() : null)
                 .hasDefect(inspection.getHasDefect())
+                .actionStatus(inspection.getActionStatus())
                 .inspectedAt(inspection.getInspectedAt())
                 .createdAt(inspection.getCreatedAt())
                 .build();

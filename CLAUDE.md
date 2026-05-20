@@ -1,6 +1,6 @@
 # 스마트 제조 품질관리 플랫폼 — Backend
 
-제조 현장의 생산라인에서 카메라와 엣지 디바이스가 수집한 검사 데이터를 실시간으로 처리하고, 불량 발생 시 관리자에게 즉시 알림을 제공하는 스마트 품질관리 시스템.  
+제조 현장의 생산라인에서 카메라와 엣지 디바이스가 수집한 검사 데이터를 실시간으로 처리하고, 불량 발생 시 전체 직원에게 즉시 알림을 제공하는 스마트 품질관리 시스템.  
 누적 검사 데이터를 기반으로 AI가 공정 개선 리포트를 자동 생성하며, 교대조별·생산라인별 불량 통계를 대시보드로 시각화해 관리자의 의사결정을 지원한다.  
 현장 근로자, 관리자, 그리고 카메라·AI 분석 서버 같은 내부 시스템까지 서로 다른 인증 채널로 통합한 백엔드 플랫폼.
 
@@ -31,7 +31,7 @@
 
 | 역할 | 설명 |
 |---|---|
-| `WORKER` (현장 근로자) | 자신의 교대조 내 검사 이력 조회, 검사 상태 확인, 본인 프로필 조회 |
+| `WORKER` (현장 근로자) | 자신의 교대조 내 검사 이력 조회, 검사 상태 확인, 본인 프로필 조회, 불량 감지 알림 수신 |
 | `ADMIN` (관리자) | 계정 생성/수정/상태변경, 전체 검사 이력 조회, 공정 개선 분석 요청, 실시간 알림 수신 |
 
 ### System Actor (내부 시스템 — 별도 인증 채널)
@@ -81,36 +81,40 @@
 
 | 기능 | 주체 | 엔드포인트 |
 |---|---|---|
-| 검사 생성 (개발/테스트용) | ADMIN | `POST /api/inspections` |
+| 이미지 업로드 + 검사 생성 (테스트용) | ADMIN | `POST /api/inspections/upload` |
+| 검사 생성 (테스트용) | ADMIN | `POST /api/inspections` |
+| 최근 불량 5개 조회 (실시간 모니터링) | ADMIN | `GET /api/inspections/latest` |
 | 검사 이력 목록 조회 (필터/페이징) | WORKER, ADMIN | `GET /api/inspections?lineId=&status=&page=&size=` |
 | 검사 상세 조회 | WORKER, ADMIN | `GET /api/inspections/{inspectionId}` |
 | 검사 상태 조회 | WORKER, ADMIN | `GET /api/inspections/{inspectionId}/status` |
-| 검사 분석 시작 (개발/테스트용) | ADMIN | `POST /api/inspections/{inspectionId}/analyze` |
+| 조치 완료 처리 | WORKER, ADMIN | `PATCH /api/inspections/{inspectionId}/action` |
+| 검사 분석 시작 (테스트용) | ADMIN | `POST /api/inspections/{inspectionId}/analyze` |
 | 프레임 수집 (검사 생성 + 분석 즉시 시작) | 카메라/엣지 디바이스 | `POST /internal/frames` |
 | 분석 완료 콜백 수신 | AI 분석 서버 | `POST /internal/callbacks/{inspectionId}` |
 
 > - 검사 도메인은 **상태 머신** 성격: `PENDING → PROCESSING → DONE / FAILED`
 > - `WORKER`는 자신이 배정된 라인의 검사만 조회 가능 (다른 라인 접근 시 404)
 > - `ADMIN`은 전체 조회 가능, `lineId` / `status` 필터 지원
-> - 콜백 수신 시 `hasDefect=true`이면 `NotificationService.sendDefectDetected()` 자동 호출 → ADMIN 전체 알림 발송
+> - 콜백 수신 시 `hasDefect=true`이면 `NotificationService.sendDefectDetected()` 자동 호출 → ADMIN 전체 알림 발송, `actionStatus = UNRESOLVED` 자동 세팅
 > - `DefectType`: `SCRATCH` / `DENT` / `CRACK` / `CONTAMINATION` / `MISSING_PART` / `DIMENSION_ERROR`
-> - **실제 운영 흐름** (`POST /internal/frames`): 카메라/엣지 디바이스가 프레임을 전송하면 검사 생성과 동시에 AI 분석이 자동 시작됨 (`createInspectionAndStartAnalysis`)
-> - **개발/테스트 흐름** (`POST /api/inspections` → `POST /api/inspections/{id}/analyze`): 실물 카메라 없이 테스트할 때 ADMIN이 수동으로 검사를 생성하고 분석을 시작하는 용도. 카메라 연동 완료 후 제거 검토 필요
+> - `ActionStatus`: `UNRESOLVED` (불량 확정 시 자동) / `RESOLVED` (조치 완료 처리 후)
+> - **실제 운영 흐름** (`POST /internal/frames`): 카메라가 이미지 + lineId만 전송 → 교대조/근로자는 현재 시간·라인 배정 기준으로 백엔드가 자동 결정 → 검사 생성 + AI 분석 즉시 시작
+> - **개발/테스트 흐름** (`POST /api/inspections/upload` → `POST /api/inspections/{id}/analyze`): 브라우저에서 이미지 업로드 후 분석 시작. 카메라 연동 완료 후 제거 검토 필요
 
 ### 4. 알림 (Notification)
 
 | 기능 | 주체 | 엔드포인트 |
 |---|---|---|
-| SSE 실시간 알림 구독 | ADMIN | `GET /api/notifications/subscribe` |
-| 알림 목록 조회 (필터/페이징) | ADMIN | `GET /api/notifications?read=&page=&size=` |
-| 미확인 알림 개수 조회 | ADMIN | `GET /api/notifications/unread-count` |
-| 단건 읽음 처리 | ADMIN | `PATCH /api/notifications/{notificationId}/read` |
-| 전체 읽음 처리 | ADMIN | `PATCH /api/notifications/read-all` |
+| SSE 실시간 알림 구독 | WORKER, ADMIN | `GET /api/notifications/subscribe` |
+| 알림 목록 조회 (필터/페이징) | WORKER, ADMIN | `GET /api/notifications?read=&page=&size=` |
+| 미확인 알림 개수 조회 | WORKER, ADMIN | `GET /api/notifications/unread-count` |
+| 단건 읽음 처리 | WORKER, ADMIN | `PATCH /api/notifications/{notificationId}/read` |
+| 전체 읽음 처리 | WORKER, ADMIN | `PATCH /api/notifications/read-all` |
 
 > - 알림의 트리거 주체는 **검사 도메인** (불량 확정 시 발생). 알림은 수신/관리만 담당.
 > - `read` 쿼리 파라미터: 없으면 전체, `false`면 미확인, `true`면 확인완료
 > - SSE 이벤트 이름: 최초 연결 시 `connected`, 새 알림 수신 시 `notification`
-> - inspection 도메인에서 `NotificationService.sendDefectDetected(lineName, defectType, handlerName)` 호출로 ADMIN 전체 발송
+> - inspection 도메인에서 `NotificationService.sendDefectDetected(lineName, defectType, handlerName)` 호출로 **ACTIVE 상태 전체 사용자(ADMIN + WORKER) 발송**
 > - `NotificationType`: `DEFECT_DETECTED` / `SYSTEM`
 
 ### 5. 대시보드 / 통계 (Dashboard)
@@ -133,16 +137,16 @@
 | 공정 개선 분석 목록 조회 (페이징) | ADMIN | `GET /api/analysis?page=&size=` |
 | 최신 분석 결과 조회 | ADMIN | `GET /api/analysis/latest` |
 | 공정 개선 분석 상세 조회 | ADMIN | `GET /api/analysis/{analysisId}` |
-| 공정 분석 완료 콜백 수신 | AI 분석 서버 | `POST /internal/analysis-callbacks/{analysisId}` |
+| 공정 분석 완료 콜백 수신 (예비용) | AI 분석 서버 | `POST /internal/analysis-callbacks/{analysisId}` |
 
-> - **비동기 처리 흐름**: `POST /api/analysis` → AI 서버 `/process-analyze` 호출 → AI 서버가 `POST /internal/analysis-callbacks/{id}`로 결과 콜백 → DB 저장 → `GET /api/analysis/latest`로 조회
+> - **처리 흐름 (OpenAI 직접 연동)**: `POST /api/analysis` → 최근 30일 검사 데이터 수집 → `OpenAiClient`로 OpenAI API(`gpt-4o-mini`) 직접 호출 → 결과 즉시 DB 저장 → `GET /api/analysis/latest`로 조회
+> - **DB 커넥션 분리**: `startAnalysis()`는 `@Transactional(propagation = NOT_SUPPORTED)` + `TransactionTemplate`으로 검사 데이터 조회·결과 저장·OpenAI 호출을 트랜잭션별 분리 → 커넥션 풀 고갈 방지
 > - `inspection`과 연결되지만 목적·생명주기가 달라 **독립 도메인**으로 분리
 > - 상태 머신: `PENDING → PROCESSING → DONE / FAILED`
 > - 결과는 `patterns`(발견된 패턴 목록)와 `recommendations`(추천 조치 목록)로 구성 — DB에 JSON TEXT로 저장
 > - `SeverityLevel`: `HIGH`(높음) / `MEDIUM`(중간) / `LOW`(관찰)
-> - **AI 서버 엔드포인트 미확정**: 현재 `/process-analyze`로 임시 지정 — AI 서버 스펙 확정 후 `AiAnalysisClient.requestProcessAnalysis()` URL 수정 필요
-> - AI 서버 요청 페이로드: `{ analysisId, callbackUrl }`
-> - AI 서버 콜백 페이로드: `{ patterns: [{title, description, severity}], recommendations: [{title, description}] }`
+> - **OpenAI 프롬프트 구성**: 라인별·불량 유형별·교대조별 집계 통계를 텍스트로 구성해 전달
+> - AI 서버 콜백 엔드포인트(`/internal/analysis-callbacks/{id}`)는 코드에 유지되어 있으나 현재 흐름에서는 미사용
 
 ### 7. 내부 시스템 연동 API (Internal)
 
@@ -271,13 +275,15 @@ src/main/java/com/sjcapstone/
 │   │   ├── entity/
 │   │   │   ├── Inspection.java
 │   │   │   ├── InspectionStatus.java  (enum: PENDING/PROCESSING/DONE/FAILED)
+│   │   │   ├── ActionStatus.java      (enum: UNRESOLVED/RESOLVED)
 │   │   │   └── DefectType.java        (enum: SCRATCH/DENT/CRACK/CONTAMINATION/MISSING_PART/DIMENSION_ERROR)
 │   │   ├── dto/
 │   │   │   ├── InspectionCreateRequest.java
 │   │   │   ├── InspectionResponse.java
 │   │   │   ├── InspectionListItemResponse.java
 │   │   │   ├── InspectionPageResponse.java
-│   │   │   └── InspectionStatusResponse.java
+│   │   │   ├── InspectionStatusResponse.java
+│   │   │   └── RecentDefectResponse.java
 │   │   └── exception/
 │   │       ├── InspectionNotFoundException.java
 │   │       └── InvalidInspectionStatusException.java
@@ -354,9 +360,10 @@ src/main/java/com/sjcapstone/
     │   ├── AdminDataInitializer.java
     │   └── LineDataInitializer.java # ApplicationRunner — A/B/C 라인 seed 데이터
     ├── client/
-    │   ├── AiAnalysisClient.java    # AI 서버 HTTP 호출 (POST /analyze, POST /process-analyze)
+    │   ├── AiAnalysisClient.java    # AI 서버 HTTP 호출 (POST /analyze — 검사 분석용)
     │   ├── AiAnalysisRequest.java   # 검사 분석 요청 DTO { inspectionId, imageUrl, callbackUrl }
-    │   └── AiProcessAnalysisRequest.java  # 공정 분석 요청 DTO { analysisId, callbackUrl }
+    │   ├── AiProcessAnalysisRequest.java  # 공정 분석 요청 DTO { analysisId, callbackUrl } (현재 미사용)
+    │   └── OpenAiClient.java        # OpenAI API 직접 호출 (공정 개선 분석용, gpt-4o-mini)
     ├── entity/
     │   └── BaseEntity.java          # createdAt, updatedAt (JPA Auditing)
     ├── exception/
@@ -392,11 +399,11 @@ src/main/java/com/sjcapstone/
 /api/shifts/**             → 교대조 (JWT 필요)
 /api/lines/**              → 생산라인 (JWT 필요)
 /api/inspections/**        → 검사 (JWT 필요)
-/api/notifications/subscribe          → SSE 구독 (ADMIN, JWT 필요)
-/api/notifications                    → 알림 목록 조회 (ADMIN, ?read=&page=&size=)
-/api/notifications/unread-count       → 미확인 개수 조회 (ADMIN)
-/api/notifications/{id}/read          → 단건 읽음 처리 (ADMIN)
-/api/notifications/read-all           → 전체 읽음 처리 (ADMIN)
+/api/notifications/subscribe          → SSE 구독 (WORKER, ADMIN, JWT 필요)
+/api/notifications                    → 알림 목록 조회 (WORKER, ADMIN, ?read=&page=&size=)
+/api/notifications/unread-count       → 미확인 개수 조회 (WORKER, ADMIN)
+/api/notifications/{id}/read          → 단건 읽음 처리 (WORKER, ADMIN)
+/api/notifications/read-all           → 전체 읽음 처리 (WORKER, ADMIN)
 /api/dashboard/**          → 대시보드 통계 (ADMIN 전용)
 /api/analysis/**           → 공정 개선 분석 (ADMIN 전용)
 
@@ -418,7 +425,7 @@ src/main/java/com/sjcapstone/
 - 사번(`employeeId`)은 UUID 타입, 서버에서 자동 생성
 - `email`은 nullable — 선택 입력 (loginId가 주 식별자)
 - **비밀번호 없음** — 인증 정보는 Auth 도메인에서 완전 분리 관리
-- `UserRepository.findAllByRoleAndDeletedAtIsNull(UserRole)` — notification 도메인에서 ADMIN 전체 발송 시 사용
+- `UserRepository.findAllByStatusAndDeletedAtIsNull(UserStatus)` — notification 도메인에서 ACTIVE 전체 발송 시 사용
 
 ### Auth (인증)
 - `user`와 완전 분리: `auth` 테이블에 `user_id`(FK), `login_id`, `password`, `passwordChangeRequired` 보관
@@ -452,22 +459,25 @@ src/main/java/com/sjcapstone/
 ### Inspection (검사)
 - 검사 생성, 상태 전환, 프레임 결과 저장
 - 상태 머신: `PENDING → PROCESSING → DONE / FAILED`
-- 불량 확정 시 `notification` 도메인으로 알림 트리거
-- **실시간 검사 흐름** (카메라/엣지 디바이스): `POST /internal/frames` → `createInspectionAndStartAnalysis()` → 검사 생성 + `startProcessing()` + `AiAnalysisClient.requestAnalysis()` 즉시 호출 → AI 서버가 `POST /internal/callbacks/{id}`로 결과 콜백
-- **수동 검사 흐름** (ADMIN): `POST /api/inspections` (검사 생성, PENDING 상태) → `POST /api/inspections/{id}/analyze` → `startAnalysis()` → AI 서버 연동
+- 불량 확정 시 `notification` 도메인으로 알림 트리거 + `actionStatus = UNRESOLVED` 자동 세팅
+- `ActionStatus` enum: `UNRESOLVED` (조치 미처리) / `RESOLVED` (조치 완료) — 정상 검사는 `null`
+- **실시간 검사 흐름** (카메라/엣지 디바이스): `POST /internal/frames` (이미지 + lineId) → 교대조·근로자 자동 결정 → `createInspectionAndStartAnalysis()` → DB 커밋 후 AI 호출 (커넥션 분리)
+- **테스트 흐름** (ADMIN): `POST /api/inspections/upload` (이미지 업로드 + 검사 생성) → `POST /api/inspections/{id}/analyze` → AI 서버 연동
+- `POST /internal/frames` 파라미터: `file` (이미지) + `lineId`만 필요. 교대조는 `ShiftRepository.findCurrentShift(LocalTime)` (야간 교대 자정 넘김 포함), 근로자는 `UserRepository.findFirstByLine_IdAndRoleAndStatusAndDeletedAtIsNull()`로 자동 결정
 - AI 서버 요청 페이로드: `{ inspectionId, imageUrl, callbackUrl }` (`callbackUrl` = `app.base-url + /internal/callbacks/{id}`)
-- `createInspectionAndStartAnalysis()`에서 AI 요청 실패 시 `inspection.fail()`로 상태 FAILED 처리 (예외 전파 없음)
-- **주의**: `createInspectionAndStartAnalysis()`는 `@Transactional` 범위 안에서 AI 서버 HTTP 호출을 동기로 실행 → AI 응답 대기 중 DB 커넥션이 계속 점유됨. 현재 규모에서는 문제없으나 트래픽 증가 시 커넥션 풀 고갈 위험 → 비동기 처리 전환 검토 필요
+- **DB 커넥션 분리**: `createInspectionAndStartAnalysis()`, `startAnalysis()` 메서드는 `@Transactional(propagation = NOT_SUPPORTED)` + `TransactionTemplate`으로 DB 저장을 먼저 커밋한 뒤 AI HTTP 호출 수행 → 커넥션 풀 고갈 방지
+- Grad-CAM 이미지: AI 서버가 콜백으로 `gradCamImageUrl` 전달 → `inspections.grad_cam_image_url`에 저장 → 백엔드가 `/grad-cam-images/**` 경로로 정적 서빙 (`file.grad-cam-dir` 설정 필요)
 
 ### Notification (알림)
-- 불량 발생 시 ADMIN 대상 알림 생성 (soft delete된 사용자 제외)
+- 불량 발생 시 **ACTIVE 상태 전체 사용자(ADMIN + WORKER)** 대상 알림 생성 (soft delete된 사용자 제외)
 - SSE 기반 실시간 push (`connected` / `notification` 이벤트)
 - 알림 목록 조회: `isRead` 필터(전체/미확인/확인완료) + 페이징 (`NotificationPageResponse`)
 - 미확인 알림 개수 조회 (`UnreadCountResponse`)
 - 단건 읽음 처리 / 전체 읽음 처리 (bulk update)
+- **SSE 커넥션 풀 고갈 방지**: `subscribe()` 메서드는 `@Transactional(propagation = NOT_SUPPORTED)` 적용 — SSE 연결이 30분간 유지되는 동안 DB 커넥션을 점유하지 않음
 - **inspection 도메인 연동 진입점**:
-  - `sendToAdmins(type, title, message)` — 모든 ADMIN에게 직접 발송
-  - `sendDefectDetected(lineName, defectType, handlerName)` — 불량 감지 convenience 메서드 (`handlerName` nullable)
+  - `sendToAdmins(type, title, message)` — 모든 ADMIN에게만 직접 발송 (시스템 알림 등에 사용)
+  - `sendDefectDetected(lineName, defectType, handlerName)` — 불량 감지 시 **ACTIVE 전체 사용자** 발송 (`handlerName` nullable)
   - inspection 엔티티에 직접 의존하지 않음; 파라미터는 primitive/String 기반
 - `NotificationType`: `DEFECT_DETECTED` / `SYSTEM`
 - 알림 응답 예시:
@@ -476,7 +486,7 @@ src/main/java/com/sjcapstone/
     "notificationId": 10,
     "notificationType": "DEFECT_DETECTED",
     "title": "불량 부품 감지",
-    "message": "A라인 - 도어 스크래치 | 담당자: 김관리",
+    "message": "A라인 - 불량 감지 | 담당자: 김철수",
     "isRead": false,
     "createdAt": "2026-04-11T14:32:05"
   }
@@ -494,10 +504,16 @@ src/main/java/com/sjcapstone/
 - `process_analyses` 테이블, `BaseEntity` 상속 (createdAt, updatedAt)
 - 상태 머신: `PENDING → PROCESSING → DONE / FAILED`
 - `patterns`(JSON TEXT), `recommendations`(JSON TEXT) — Jackson ObjectMapper로 직렬화/역직렬화
-- 비동기 처리 흐름: `POST /api/analysis` → `ProcessAnalysis` 저장(PENDING) → AI 서버 `/process-analyze` 호출(PROCESSING) → AI 서버가 `/internal/analysis-callbacks/{id}` 콜백 → `complete()` 호출(DONE) → 조회
-- AI 요청 실패 시 `fail()` 호출, 상태 FAILED (예외 전파 없음)
+- **처리 흐름 (OpenAI 직접 연동)**:
+  1. `POST /api/analysis` → `ProcessAnalysis` 저장(PENDING→PROCESSING)
+  2. 최근 30일 `DONE` 상태 검사 데이터 수집
+  3. 라인별·불량 유형별·교대조별 집계 → 텍스트 프롬프트 구성
+  4. `OpenAiClient.analyze(prompt)` → OpenAI `gpt-4o-mini` 호출 (DB 커넥션 미점유)
+  5. 응답 JSON 파싱 → `complete()` 호출(DONE) → 조회
+- AI 호출 실패 시 `fail(errorMessage)` 호출, 상태 FAILED (예외 전파 없음)
+- **DB 커넥션 분리**: `startAnalysis()`는 `NOT_SUPPORTED` + `TransactionTemplate` 패턴으로 각 DB 작업을 개별 트랜잭션으로 분리
 - `AnalysisRepository.findTopByOrderByCreatedAtDesc()` — `GET /api/analysis/latest`용
-- **AI 서버 엔드포인트 미확정**: `AiAnalysisClient.requestProcessAnalysis()`에서 `/process-analyze` 임시 사용 — 확정 후 교체
+- `processCallback()` 메서드는 코드에 유지 (외부 AI 서버 콜백 수신 예비용) — 현재 흐름에서는 미호출
 
 ---
 
@@ -512,10 +528,11 @@ src/main/java/com/sjcapstone/
 
 ### SecurityConfig 공개 엔드포인트
 - `POST /api/auth/login` — 인증 없이 접근 허용 (로그인만 공개, `/api/auth/**` 전체 공개 아님)
+- `/images/**` — 인증 없이 접근 허용 (업로드 이미지 정적 서빙)
 - `/api/admin/**` — `ADMIN` 권한 필요 (`hasRole("ADMIN")`)
 - `/api/dashboard/**` — `ADMIN` 권한 필요 (`hasRole("ADMIN")`)
 - `/api/analysis/**` — `ADMIN` 권한 필요 (`hasRole("ADMIN")`)
-- 나머지 모든 엔드포인트 — JWT 필요
+- 나머지 모든 엔드포인트 (`/api/notifications/**`, `/api/inspections/**` 등) — JWT 필요 (WORKER, ADMIN 모두 접근 가능)
 
 ---
 
@@ -608,14 +625,23 @@ jwt.expiration=86400000   # 24시간 (ms)
 # Internal API Key
 internal.service-key=YOUR_INTERNAL_SERVICE_KEY
 
-# AI Server (ngrok URL - update on every ngrok restart)
+# AI Server (ngrok URL - update on every ngrok restart) — 검사 분석용
 ai.server.url=https://your-ai-ngrok-url.ngrok.io
 
 # Backend public URL (used as callback base URL for AI server)
 app.base-url=https://your-backend-ngrok-url.ngrok.io
+
+# OpenAI API Key — 공정 개선 분석용 (gpt-4o-mini)
+openai.api-key=YOUR_OPENAI_API_KEY
+
+# File upload
+file.upload-dir=./uploads/images
+file.grad-cam-dir=/Users/kimsohee/PycharmProjects/AI/ai/grad_cam_images  # AI 서버가 저장하는 절대경로
 ```
 
 > `ai.server.url`과 `app.base-url`은 ngrok 재실행 시마다 새 URL로 교체 필요.
+> `file.grad-cam-dir`은 AI 서버의 grad-cam 이미지 저장 경로 — 백엔드가 `/grad-cam-images/**`로 정적 서빙.
+> `openai.api-key`는 공정 개선 분석(`POST /api/analysis`)에서 OpenAI API 직접 호출 시 필요.
 
 ### JPA Auditing
 - `@EnableJpaAuditing`은 `JpaAuditingConfig.java`에 분리 선언 (CapstoneApplication에 두지 않음)
@@ -637,11 +663,11 @@ app.base-url=https://your-backend-ngrok-url.ngrok.io
 | user — CRUD, 예외 연결 | 완료 |
 | shift — entity, 예외, Repository, DTO, Service, Controller | 완료 |
 | line — entity, Repository, DTO, Service, Controller, seed 초기화 | 완료 |
-| notification — entity, SSE 구독, 필터/페이징 목록 조회, 미확인 개수, 단건/전체 읽음 처리, ADMIN 전체 발송, 불량 감지 helper | 완료 |
-| inspection — entity, 상태 머신, CRUD, 분석 시작, AI 서버 HTTP 호출, 콜백 수신 | 완료 |
-| global/client — AiAnalysisClient (RestTemplate 기반 AI 서버 연동) | 완료 |
+| notification — entity, SSE 구독, 필터/페이징 목록 조회, 미확인 개수, 단건/전체 읽음 처리, 전체 사용자(ADMIN+WORKER) 발송, SSE 커넥션 풀 고갈 버그 수정 | 완료 |
+| inspection — entity, 상태 머신, CRUD, 분석 시작, AI 서버 HTTP 호출, 콜백 수신, 조치 완료(`save` 명시적 호출), 최근 불량 조회, 이미지 업로드 | 완료 |
+| global/client — AiAnalysisClient (검사 분석, RestTemplate), OpenAiClient (공정 분석, gpt-4o-mini 직접 호출) | 완료 |
 | dashboard — GET /api/dashboard, 집계 쿼리 (요약/추이/라인별), projection | 완료 |
-| analysis — entity, 상태 머신, CRUD, AI 서버 연동, 콜백 수신, JSON 직렬화 | 완료 |
+| analysis — entity, 상태 머신, CRUD, OpenAI 직접 연동, JSON 직렬화, DB 커넥션 분리 | 완료 |
 | internal (frame 수집, 검사 AI 콜백, 공정 분석 콜백) | 완료 |
 
 ---
@@ -653,12 +679,11 @@ app.base-url=https://your-backend-ngrok-url.ngrok.io
 | PENDING 유저 API 접근 제한 | 승인 전 `/api/users/**`, `/api/shifts/**` 등 접근 차단 여부 결정 필요 |
 | 내부 시스템 인증 방식 | API Key 정적 관리 vs 서비스 토큰 발급 방식 결정 필요 |
 | 검사 상태 머신 정의 | `PENDING → PROCESSING → DONE/FAILED` 전환 규칙 명확화 |
-| AI 분석 서버 연동 방식 | RestTemplate 동기 HTTP 호출로 구현 완료. `@Transactional` 범위 안에서 HTTP 호출이 실행되어 AI 응답 대기 중 DB 커넥션이 점유됨 — 트래픽 증가 시 커넥션 풀 고갈 위험, 비동기 메시지 큐 전환 검토 필요 |
-| 공정 분석 AI 서버 엔드포인트 | AI 서버의 공정 분석 API 경로 미확정 — 현재 `/process-analyze` 임시 사용. 확정 후 `AiAnalysisClient.requestProcessAnalysis()` URL 수정 필요 |
+| AI 분석 서버 연동 방식 | `TransactionTemplate`으로 DB 트랜잭션을 AI HTTP 호출 전 커밋 분리 완료 — 커넥션 풀 고갈 해결. 추가 트래픽 증가 시 비동기 메시지 큐 전환 검토 가능 |
 | dashboard actionSummary | 조치 도메인 미구현 — `DefectAction`/`InspectionAction` 추가 후 실제 집계로 교체 필요 |
 | dashboard 데이터 정합성 | 현재 실시간 집계 쿼리 — 데이터 증가 시 Redis 캐싱 여부 검토 필요 |
 | inspection과 frame의 관계 | 프레임을 inspection 하위로 볼지, 독립 엔티티로 볼지 |
-| SSE 알림 대상 범위 | 현재 전체 ADMIN 대상으로 구현 완료. 특정 라인 담당자 한정 발송이 필요한 경우 추가 구현 필요 |
 | Redis 도입 시기 | refresh token 저장 용도 |
 | Swagger 설정 추가 시점 | |
 | `user` 도메인 직접 접근 API 정리 | `PUT /api/users/{id}` 가 admin 기능과 중복될 수 있으므로 역할 명확화 필요 |
+| PENDING 유저 API 접근 제한 | 승인 전 `/api/users/**`, `/api/shifts/**` 등 접근 차단 여부 결정 필요 |

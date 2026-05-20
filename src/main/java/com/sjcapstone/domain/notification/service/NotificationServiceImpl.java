@@ -10,6 +10,7 @@ import com.sjcapstone.domain.notification.repository.NotificationRepository;
 import com.sjcapstone.domain.notification.repository.SseEmitterRepository;
 import com.sjcapstone.domain.user.entity.User;
 import com.sjcapstone.domain.user.entity.UserRole;
+import com.sjcapstone.domain.user.entity.UserStatus;
 import com.sjcapstone.domain.user.exception.UserNotFoundException;
 import com.sjcapstone.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -40,6 +42,7 @@ public class NotificationServiceImpl implements NotificationService {
     // ──────────────────────────────────────────────────────────────────────
 
     @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public SseEmitter subscribe(Long userId) {
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
 
@@ -85,7 +88,15 @@ public class NotificationServiceImpl implements NotificationService {
     public void sendDefectDetected(String lineName, String defectType, String handlerName) {
         String title = "불량 부품 감지";
         String message = buildDefectMessage(lineName, defectType, handlerName);
-        sendToAdmins(NotificationType.DEFECT_DETECTED, title, message);
+        sendToAllActive(NotificationType.DEFECT_DETECTED, title, message);
+    }
+
+    private void sendToAllActive(NotificationType type, String title, String message) {
+        List<User> users = userRepository.findAllByStatusAndDeletedAtIsNull(UserStatus.ACTIVE);
+        for (User user : users) {
+            Notification notification = saveNotification(user, type, title, message);
+            pushSse(user.getId(), notification);
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────────

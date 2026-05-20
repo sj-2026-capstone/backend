@@ -70,7 +70,7 @@ public class DashboardServiceImpl implements DashboardService {
                 inspectionRepository.findDailyDefectStatsSince(startOfCurrentPeriod);
 
         Map<LocalDate, DailyDefectStatsProjection> dailyStatsMap = dailyStats.stream()
-                .collect(Collectors.toMap(s -> s.getDate().toLocalDate(), s -> s));
+                .collect(Collectors.toMap(DailyDefectStatsProjection::getDate, s -> s));
 
         List<DefectRateTrendItemResponse> defectRateTrend = IntStream.range(0, 7)
                 .mapToObj(i -> today.minusDays(6 - i))

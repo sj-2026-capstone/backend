@@ -1,9 +1,9 @@
 package com.sjcapstone.domain.dashboard.dto.projection;
 
-import java.sql.Date;
+import java.time.LocalDate;
 
 public interface DailyDefectStatsProjection {
-    Date getDate();
+    LocalDate getDate();
     Long getInspectionCount();
     Long getDefectCount();
 }

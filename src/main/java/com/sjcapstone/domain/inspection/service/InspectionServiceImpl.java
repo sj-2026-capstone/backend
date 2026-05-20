@@ -1,7 +1,8 @@
 package com.sjcapstone.domain.inspection.service;
 
 import com.sjcapstone.domain.inspection.dto.*;
-import com.sjcapstone.domain.inspection.entity.DefectType;
+import java.util.List;
+import java.util.stream.Collectors;
 import com.sjcapstone.domain.inspection.entity.Inspection;
 import com.sjcapstone.domain.inspection.entity.InspectionStatus;
 import com.sjcapstone.domain.inspection.exception.InspectionNotFoundException;
@@ -25,7 +26,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Slf4j
 @Service
@@ -39,6 +43,7 @@ public class InspectionServiceImpl implements InspectionService {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final AiAnalysisClient aiAnalysisClient;
+    private final PlatformTransactionManager transactionManager;
 
     @Override
     public InspectionResponse createInspection(InspectionCreateRequest request) {
@@ -46,17 +51,30 @@ public class InspectionServiceImpl implements InspectionService {
     }
 
     @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public InspectionResponse createInspectionAndStartAnalysis(InspectionCreateRequest request) {
-        Inspection inspection = inspectionRepository.save(createInspectionEntity(request));
+        // DB 저장 후 즉시 커밋 → 커넥션 반환
+        Long[] idRef = new Long[1];
+        String[] imageUrlRef = new String[1];
+        InspectionResponse[] responseRef = new InspectionResponse[1];
 
-        inspection.startProcessing();
+        new TransactionTemplate(transactionManager).execute(status -> {
+            Inspection inspection = inspectionRepository.save(createInspectionEntity(request));
+            inspection.startProcessing();
+            idRef[0] = inspection.getId();
+            imageUrlRef[0] = inspection.getImageUrl();
+            responseRef[0] = InspectionResponse.from(inspection);
+            return null;
+        });
+
+        // AI 호출은 커넥션 반환 후 수행
         try {
-            aiAnalysisClient.requestAnalysis(inspection.getId(), inspection.getImageUrl());
+            aiAnalysisClient.requestAnalysis(idRef[0], imageUrlRef[0]);
         } catch (Exception e) {
-            log.warn("AI 분석 요청 실패 — inspectionId={}, error={}", inspection.getId(), e.getMessage());
+            log.warn("AI 분석 요청 실패 — inspectionId={}, error={}", idRef[0], e.getMessage());
         }
 
-        return InspectionResponse.from(inspection);
+        return responseRef[0];
     }
 
     private Inspection createInspectionEntity(InspectionCreateRequest request) {
@@ -148,29 +166,38 @@ public class InspectionServiceImpl implements InspectionService {
     }
 
     @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public InspectionResponse startAnalysis(Long inspectionId, Long userId, UserRole role) {
         if (role != UserRole.ADMIN) {
             throw new CustomException(ErrorCode.FORBIDDEN);
         }
 
-        Inspection inspection = inspectionRepository.findById(inspectionId)
-                .orElseThrow(InspectionNotFoundException::new);
+        String[] imageUrlRef = new String[1];
+        InspectionResponse[] responseRef = new InspectionResponse[1];
 
-        if (inspection.getStatus() != InspectionStatus.PENDING) {
-            throw new InvalidInspectionStatusException();
-        }
+        new TransactionTemplate(transactionManager).execute(status -> {
+            Inspection inspection = inspectionRepository.findById(inspectionId)
+                    .orElseThrow(InspectionNotFoundException::new);
+            if (inspection.getStatus() != InspectionStatus.PENDING) {
+                throw new InvalidInspectionStatusException();
+            }
+            inspection.startProcessing();
+            imageUrlRef[0] = inspection.getImageUrl();
+            responseRef[0] = InspectionResponse.from(inspection);
+            return null;
+        });
 
-        inspection.startProcessing();
         try {
-            aiAnalysisClient.requestAnalysis(inspection.getId(), inspection.getImageUrl());
+            aiAnalysisClient.requestAnalysis(inspectionId, imageUrlRef[0]);
         } catch (Exception e) {
             log.warn("AI 분석 요청 실패 — inspectionId={}, error={}", inspectionId, e.getMessage());
         }
-        return InspectionResponse.from(inspection);
+
+        return responseRef[0];
     }
 
     @Override
-    public void processAnalysisCallback(Long inspectionId, boolean hasDefect, DefectType defectType, String resultNote, String gradCamImageUrl) {
+    public void processAnalysisCallback(Long inspectionId, boolean hasDefect, String gradCamImageUrl) {
         Inspection inspection = inspectionRepository.findById(inspectionId)
                 .orElseThrow(InspectionNotFoundException::new);
 
@@ -178,17 +205,39 @@ public class InspectionServiceImpl implements InspectionService {
             throw new InvalidInspectionStatusException();
         }
 
-        inspection.complete(hasDefect, defectType, resultNote, gradCamImageUrl);
+        inspection.complete(hasDefect, gradCamImageUrl);
 
         if (hasDefect) {
-            String defectDisplayName = defectType != null ? defectType.getDisplayName() : "알 수 없음";
             String workerName = inspection.getWorker() != null ? inspection.getWorker().getUserName() : null;
             notificationService.sendDefectDetected(
                     inspection.getLine().getLineName(),
-                    defectDisplayName,
+                    "불량 감지",
                     workerName
             );
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RecentDefectResponse> getRecentDefects() {
+        return inspectionRepository
+                .findTop5ByHasDefectTrueAndStatusOrderByInspectedAtDesc(InspectionStatus.DONE)
+                .stream()
+                .map(RecentDefectResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public void resolveAction(Long inspectionId, Long userId, UserRole role) {
+        Inspection inspection = inspectionRepository.findById(inspectionId)
+                .orElseThrow(InspectionNotFoundException::new);
+
+        if (role == UserRole.WORKER) {
+            validateWorkerLineAccess(userId, inspection);
+        }
+
+        inspection.resolveAction();
+        inspectionRepository.save(inspection);
     }
 
     private void validateWorkerLineAccess(Long userId, Inspection inspection) {

@@ -52,6 +52,10 @@ public class Inspection extends BaseEntity {
     @Column(name = "grad_cam_image_url")
     private String gradCamImageUrl;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "action_status", length = 20)
+    private ActionStatus actionStatus;
+
     @Column(name = "result_note", columnDefinition = "TEXT")
     private String resultNote;
 
@@ -72,13 +76,16 @@ public class Inspection extends BaseEntity {
         this.status = InspectionStatus.PROCESSING;
     }
 
-    public void complete(boolean hasDefect, DefectType defectType, String resultNote, String gradCamImageUrl) {
+    public void complete(boolean hasDefect, String gradCamImageUrl) {
         this.status = InspectionStatus.DONE;
         this.hasDefect = hasDefect;
-        this.defectType = defectType;
-        this.resultNote = resultNote;
         this.gradCamImageUrl = gradCamImageUrl;
+        this.actionStatus = hasDefect ? ActionStatus.UNRESOLVED : null;
         this.inspectedAt = LocalDateTime.now();
+    }
+
+    public void resolveAction() {
+        this.actionStatus = ActionStatus.RESOLVED;
     }
 
     public void fail(String resultNote) {

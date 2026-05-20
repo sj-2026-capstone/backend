@@ -1,0 +1,711 @@
+--- Slide 1 ---
+AI 기반 자동차 부품 품질 검사 및 공정 개선 
+지원 플랫폼
+김소희 23013240
+진성훈 23013255
+안용준 21011657
+신동주 22013384
+코스피 7000
+1
+--- Slide 2 ---
+AGENDA
+01
+04
+02
+05
+개발 목표
+AI 모델 구현 및 분석
+개발 진행 개요
+Backend 구현
+03
+06
+AI 서버 연동 및 시스템 흐름
+Frontend 구현 및 API 연동
+07
+08
+주요 이슈 및 해결 과정
+진행 상황 및 성능 개선
+2
+--- Slide 3 ---
+1. 개발 목표 
+검사 결과와 불량 발생 현황을 Dashboard로 실시간 시각화하고, 불량 발생 시 관리자에게 즉시 알림 제공
+Swin Transformer와 Grad-CAM을 활용하여 부품의 정상·불량 여부를 자동 판별하고, 불량 판단 근거를 시각적으로 제공
+누적된 검사 데이터를 기반으로 불량 패턴을 분석하고 공정 개선 방향을 제안하여 작업자의 의사결정 지원
+검사 결과, 불량 유형, 공정 정보를 체계적으로 저장하여 품질 이력 추적과 데이터 기반 관리 지원
+02. 실시간 검사 결과 모니터링 및 불량 알림 기능 개발
+01. AI 기반 자동차 부품 정상·불량 자동 판별 기능 개발
+04. 공정 데이터 기반 불량 원인 분석 및 개선 지원 기능 개발
+03. 검사 데이터 누적 및 품질 이력 관리 기능 개발
+3
+--- Slide 4 ---
+2-1 금주 계획
+현재의 비즈니스 환경은 데이터의 폭증과 사용자 요구사항의 다변화로 인해 전례 없는 전환기를 맞이하고 있습니다. 기존의 파편화된 시스템과 수기 중심의 프로세스로는 급변하는 시장의 속도를 따라잡기에 한계가 있습니다.
+이에 당사는 고객사의 근본적인 체질 개선을 위해 데이터 중심의 선순환 아키텍처를 제안합니다. 이번 프로젝트는 단순한 도구의 교체가 아니라, 업무 효율성을 극대화하고 투명한 성과 지표를 확보함으로써 귀사가 시장의 퍼스트 무버(First Mover)로 도약하는 결정적 발판이 될 것입니다.
+⸰ AI 분석 결과 및 검사 상태 연동 테스트 진행
+⸰ 대시보드 통계 및 검사 데이터 반영 검증
+⸰ SSE 기반 실시간 관리자 알림 기능 테스트
+⸰ Frontend · Backend · AI 서버 통합 연동 검증
+⸰ Grad-CAM 및 검사 상세 화면 출력 확인
+⸰ 공정 개선 분석 API 및 조회 기능 구현 진행
+⸰ Callback 기반 AI 분석 흐름 안정화 작업 수행
+⸰ 테스트 데이터 기반 최종 시연 흐름 구성
+4
+--- Slide 5 ---
+2-2 프로젝트 타임라인
+5
+--- Slide 6 ---
+2-3 전체 진행 방향
+수행 내용
+진행률
+수행 기간
+프론트엔드 공통 API 클라이언트 구성
+완료
+5.10 ~ 5.12
+로그인 및 주요 기능별 API 호출 모듈 구성
+완료
+5.10 ~ 5.13
+백엔드 응답 변환 어댑터 구현
+완료
+5.12 ~ 5.14
+프론트엔드-백엔드 API 연동 테스트
+진행 중
+5.13 ~ 진행 중
+관리자 대시보드 통계 API 구현
+완료
+5.10 ~ 5.14
+검사 데이터 기반 집계 쿼리 및 projection 추가
+완료
+5.11 ~ 5.14
+내부 프레임 수집 API 및 AI 콜백 API 구성
+완료
+5.12 ~ 5.15
+내부 시스템용 API Key 인증 구조 구성
+완료
+5.13 ~ 5.15
+AI 분석 결과와 검사·알림 연동 흐름 구현
+진행 중
+5.14 ~ 진행 중
+Swin Transformer 단일 이미지 추론 흐름 검토
+완료
+5.10 ~ 5.12
+AI 정상/불량 판독 API 형태 구성
+완료
+5.12 ~ 5.14
+Grad-CAM 기반 불량 의심 영역 시각화 구현
+완료
+5.13 ~ 5.14
+6
+--- Slide 7 ---
+3
+. AI 서버 연동 및 시스템 흐름
+7
+카메라 / 이미지 업로드
+Backend 서버
+AI 서버 요청
+(inspectionId, imageUrl, callbackUrl)
+Swin Transformer 분석
+01
+02
+03
+04
+검사 결과 저장
+AI 서버 Callback 응답
+(/internal/callbacks/{inspectionId})
+Callback 기반 AI 분석 구조 안정화
+정상/불량 판정
++ confidence
++ Grad-CAM 생성
+08
+07
+06
+05
+Dashboard 통계 및 검사 데이터 반영 검증
+불량 판정 시 관리자 실시간 알림 연동 테스트
+Grad-CAM 기반 검사 상세 화면 출력 검증
+Frontend · Backend · AI 서버 통합 데이터 흐름 검증
+09
+10
+11
+12
+--- Slide 8 ---
+4. Swin Transformer 
+본 프로젝트의 AI 모델은 자동차 부품 
+이미지를 기반으로 정상(Normal)과 불량(Defect)을 자동 분류하는 딥러닝 기반 품질 검사 모델이다. 모델은 Swin Transformer 기반의 swin_tiny_patch4_window7_224 아키텍처를 사용하였다. 해당 구조는 이미지의 지역적 특징과 전역적 특징을 동시에 학습할 수 있어 미세한 스크래치, 오염, 손상 등의 불량 패턴 탐지에 적합하다.
+입력 이미지는 Resize(224×224), Normalize 등의 전처리 과정을 거쳐 모델에 입력되며, 추론 결과에 Softmax 함수를 적용하여 정상과 불량에 대한 확률값을 계산한다. 이후 가장 높은 확률값을 기준으로 최종 판정을 수행하고 Confidence Score를 함께 제공하도록 구성하였다.
+모델 성능 평가는 Accuracy, Precision, Recall, F1-Score 및 Confusion Matrix를 기반으로 수행하였다. 특히 실제 품질 검사 환경에서는 불량 검출 성능이 중요하기 때문에 Precision과 Recall의 균형을 고려할 수 있는 F1-Score를 핵심 평가 지표로 활용하였다.
+또한 Grad-CAM 기반 시각화 구조를 적용하여 AI가 불량으로 판단한 영역을 Heatmap 형태로 표시할 수 있도록 설계하였다.            이를 통해 사용자가 AI의 판정 근거를 직관적으로 확인할 수 있도록 하였다.
+8
+--- Slide 9 ---
+4. AI 모델 개요
+Swin Transformer 기반
+ 품질 검사 모델
+AI-Hub 자동차 부품 품질 검
+사 데이터를 활용하여 정상/불량 이진 분류 모델을 구성하였다.
+모델은 swin_tiny_patch4_window7_224 기반으로 학습하였으며, 대용량 데이터를 dataset_01~16 형태로 분할하여 순차 학습을 진행하였다.
+단일 이미지 입력 후 전처리 → Swin Transformer 추론 → softmax 기반 확률 계산 → 정상/불량 판정 흐름을 구성하였다.
+AI 서버와 Backend 연동을 위해 prediction, confidence, inspectionId 기반 응답 구조를 검토하였다.
+Image Input
+Swin Transformer
+Softmax
+ Prediction
+9
+--- Slide 10 ---
+4. AI 추론 및 API 연동
+AI 추론 및 Callback 기반
+ 연동 구조
+Backend에서 inspectionId, imageUrl, callbackUrl을 AI 서버로 전달하도록 구성하였다.
+AI 서버는 전달받은
+ 이미지를 분석하여 정상/불량 판독 및 confidence 계산을 수행한다.
+분석 완료 후 /internal/callbacks/{inspectionId} API로 결과를 전달하는 callback 구조를 검증하였다.
+최종적으로 검사 결과가 Dashboard, 검사 이력, 관리자 알림 기능과 연결될 수 있도록 흐름을 구성하였다.
+AI 서버요청
+Swin Transformer 추론
+Grad-CAM 생성
+Callback 응답
+Dashboard 
+/ 알림/ 검사 
+이력 반영
+정상/불량 + confidence
+영상 업로드
+10
+--- Slide 11 ---
+4. Grad-CAM 시각화
+Grad-CAM 기반
+ 판정 근거 시각화
+Swin Transformer 기반 모델에 Grad-CAM을
+ 적용하여 모델이 불량 판정 시 집중한 영역을 시각화하였다.
+Transformer 구조는 CNN과 feature map 처리 방식이 다르기 때문에 target layer 선정 및 reshape 구조를 검토하였다.
+불량으로 판정된 이미지에 대해서만 heatmap을 생성하고, 원본 이미지 위에 overlay 형태로 시각화하였다.
+이를 통해 모델이 실제로 어떤 영역을 기준으로 판단했는지 직관적으로 확인할 수 있도록 구성하였다.
+모델의
+ 판정 근거를 시각적으로 제공하여
+AI 분석 결과의 신뢰성과 활용성을 향상
+11
+--- Slide 12 ---
+4. AI 모델 성능 평가
+AI 모델
+ 성능 분석 결과
+전체 8,963장의 평가 이미지 중 8,403장을 정확하게 분류하여 약
+ 93.75% Accuracy를 기록하였다.
+Precision은 95.31%, Recall은 93.45%로 나타나 불량 검출 성능을 안정적으로 유지하였다.
+F1-score는 94.37%를 기록하여 Precision과 Recall 사이의 균형 잡힌 성능을 확인하였다.
+Confusion Matrix 분석 결과에서도 정상과 불량 특징을 효과적으로 학습하였음을 확인할 수 있었다.
+Metric
+Result
+Accuracy
+93.75%
+Precision
+95.31%
+Recall
+93.45%
+F1-score
+94.37%
+12
+--- Slide 13 ---
+정상/불량 자동 판별 구조를 API 형태로 구성하였다.
+confidence 및 Grad-CAM 결과를 함께 반환할 수 있도록 설계하였다.
+4. AI 구현 결과 및 활용 가능성
+AI
+ 구현 결과
+Backend Callback 구조와 연결하여 Dashboard, 검사 이력, 관리자 알림 기능과 연동 가능한 흐름을 구성하였다.
+단순 모델 학습이 아닌 실제 서비스 환경과 연결 가능한 AI 분석 구조를 구현하였다.
+Grad-CAM 기반 시각화 고도화
+공정 개선 분석 기능 연동
+LLM 기반 판정 근거 설명 및 보고서 생성 기능 확장
+실제 현장 데이터 기반 일반화 성능 검증 진행
+향후
+ 확장 방향
+13
+--- Slide 14 ---
+5
+. Dashboard API 구현
+대규모 데이터 트래픽을 지연 없이 처리할 수 있는 고성능 백엔드 아키텍처를 채택합니다.
+물리적 장애 발생 시에도 데이터 손실을 방지하는 다중화 스토리지와 백업 체계를 운영합니다.
+01. 고성능 엔진 및 프레임워크
+02. 시스템 내구성 및 데이터 보존
+표준 API 가이드라인을 준수하여 기존 사내 시스템 및 타사 솔루션과 매끄럽게 연동됩니다.
+03. 개방형 인터페이스 및 통합
+Backend에서는 검사 데이터를 기반으로 Dashboard
+ 통계, AI 분석 결과 저장, 관리자 알림 기능이 연결될 수 있도록 구조를 구성하였다.
+관리자용 통합 Dashboard 조회 API인 GET /api/dashboard를 구현하였다.
+Dashboard는 별도의 엔티티를 생성하지 않고 기존 Inspection 데이터를 기반으로 실시간 집계하는 방식으로 구성하였다.
+응답 데이터는 summary, defectRateTrend, lineDefectRates, actionSummary, lastUpdatedAt 구조로 분리하여 Frontend에서 쉽게 사용할 수 있도록 구성하였다.
+관리자 Dashboard
+ API 구현
+summary 영역에서는 전체 검사 수, 오늘 검사
+ 수, 전체 불량률, 검사 수 변화율, 불량률 변화율을 제공하도록 구성하였다.
+최근 7일 데이터와 이전 7일 데이터를 비교하여 변화율을 계산할 수 있도록 구현하였다.
+defectRateTrend를 통해 최근 7일간 일별 불량률 추이를 확인할 수 있도록 구성하였다.
+lineDefectRates를 통해 생산라인별 검사 수와 불량률을 조회할 수 있도록 구현하였다.
+Dashboard
+ 통계 기능 구현
+14
+--- Slide 15 ---
+5
+. Backend
+15
+근로자와 관리자의 계정을 구분하여 관리하며, 작업자별 검사 이력과 역할 정보를 효율적으로 관리할 수 있도록 지원한다. 또한 작업자의 접근 권한을 구분하여 시스템 보안성과 관리 효율성을 향상시킨다.
+자동차 부품 정보와 생산 라인, 작업 시간 등의 데이터를 통합 관리하며, 업로드된 이미지·영상 데이터를 기반으로 검사 이력을 체계적으로 저장 및 관리한다.
+사용자 및 작업자 관리 시스템
+자동차 부품 검사 및 데이터 관리 시스템
+Swin Transformer 기반 AI 모델을 활용하여 자동차 부품의 정상·불량 여부를 자동 분석하며, Grad-CAM을 통해 불량 판단 근거를 시각적으로 제공하여 검사 신뢰성을 높인다.
+AI 기반 불량 판별 및 시각화 시스템
+검사 결과와 불량 발생 현황을 Dashboard 형태로 실시간 시각화하며, 불량 발생 시 관리자에게 즉시 알림을 제공하여 빠른 대응이 가능하도록 지원한다.
+실시간 모니터링 및 알림 시스템
+누적된 검사 데이터를 기반으로 불량 패턴과 공정 문제를 분석하고, 공정 개선 방향과 품질 향상을 위한 분석 리포트를 제공하여 작업자의 피로 부담과 반복 작업을 줄인다.
+공정 분석 및 품질 개선 지원 시스템
+--- Slide 16 ---
+5
+. Dashboard 도메인 구조
+대규모 데이터 트래픽을 지연 없이 처리할 수 있는 고성능 백엔드 아키텍처를 채택합니다.
+물리적 장애 발생 시에도 데이터 손실을 방지하는 다중화 스토리지와 백업 체계를 운영합니다.
+01. 고성능 엔진 및 프레임워크
+02. 시스템 내구성 및 데이터 보존
+표준 API 가이드라인을 준수하여 기존 사내 시스템 및 타사 솔루션과 매끄럽게 연동됩니다.
+03. 개방형 인터페이스 및 통합
+Dashboard
+ 기능 구현을 위해 domain/dashboard 패키지를 추가하였다.
+Controller, Service, DTO 구조를 분리하여 유지보수성과 확장성을 고려하였다.
+InspectionRepository에는 일별 불량 통계 및 라인별 통계 조회를 위한 native query와 projection을 추가하였다.
+이를 통해 Dashboard 통계 데이터를 효율적으로 조회할 수 있도록 구성하였다.
+Dashboard
+ 도메인 분리 구조
+카메라 및 엣지 디바이스에서 검사 프레임 데이터를 전달할 수 있도록 /internal/frames
+ API를 구현하였다.
+AI 서버 분석 결과를 전달받기 위한 /internal/callbacks/{inspectionId} Callback API를 구성하였다.
+일반 사용자 API(/api/**)와 내부 시스템 API(/internal/**)를 분리하여 호출 주체를 구분하였다.
+사용자 API는 JWT 기반 인증 구조를 사용하고, 내부 시스템 API는 API Key 기반 인증 구조를 적용하였다.
+내부 시스템 연동 API 
+구현
+Us
+er API
+JWT 인증
+In
+ternal API
+API K
+ey 인증
+16
+--- Slide 17 ---
+5
+. AI 서버 연동 및 Callback 구조
+대규모 데이터 트래픽을 지연 없이 처리할 수 있는 고성능 백엔드 아키텍처를 채택합니다.
+물리적 장애 발생 시에도 데이터 손실을 방지하는 다중화 스토리지와 백업 체계를 운영합니다.
+01. 고성능 엔진 및 프레임워크
+02. 시스템 내구성 및 데이터 보존
+표준 API 가이드라인을 준수하여 기존 사내 시스템 및 타사 솔루션과 매끄럽게 연동됩니다.
+03. 개방형 인터페이스 및 통합
+Backend에서는 RestTemplate
+ 기반 AiAnalysisClient를 구성하여 AI 서버와 통신할 수 있도록 구현하였다.
+검사 시작 시 Backend에서 AI 서버로 inspectionId, imageUrl, callbackUrl 데이터를 전달하도록 구성하였다.
+AI 서버는 이미지 분석 완료 후 /internal/callbacks/{inspectionId} API로 결과를 반환하도록 구성하였다.
+Callback 결과를 기반으로 검사 상태(DONE / FAILED), 정상 여부, 불량 여부, 불량 유형 등을 저장하도록 구현하였다.
+AI
+ 서버 연동 구조 구현
+AI Serv
+er Request
+Swin Transformer 분석
+C
+allback Response
+Inspection R
+esult 저장
+Back
+end
+17
+AI
+ 분석 결과가 불량으로 판정된 경우 관리자 알림이 생성되도록 검사 도메인과 알림 도메인을 연동하였다.
+Callback 수신 후 hasDefect=true인 경우 NotificationService.sendDefectDetected()를 호출하여 관리자에게 실시간 알림을 전달하도록 구성하였다.
+이를 통해 검사 결과 저장 → Dashboard 반영 → 관리자 알림으로 이어지는 Backend 처리 흐름을 구성하였다.
+AI
+ 분석 결과 기반 관리자 알림
+--- Slide 18 ---
+5
+. 공정 개선 분석(Analysis)
+대규모 데이터 트래픽을 지연 없이 처리할 수 있는 고성능 백엔드 아키텍처를 채택합니다.
+물리적 장애 발생 시에도 데이터 손실을 방지하는 다중화 스토리지와 백업 체계를 운영합니다.
+02. 시스템 내구성 및 데이터 보존
+표준 API 가이드라인을 준수하여 기존 사내 시스템 및 타사 솔루션과 매끄럽게 연동됩니다.
+03. 개방형 인터페이스 및 통합
+공정
+ 
+개선
+ 
+분석
+ 
+기능은
+ AI 
+분석
+ 
+결과와
+ 
+검사
+ 
+데이터를
+ 
+기반으로
+ 
+반복적인
+ 
+불량
+ 
+패턴
+ 및 
+개선
+ 
+방향을
+ 
+도출하기
+ 
+위한
+ 
+기능으로
+ 
+설계하였다
+.
+process_analyses
+ 
+테이블을
+ 
+중심으로
+ 
+구성하였으며
+, 
+공통
+ 
+시간
+ 
+컬럼
+ 
+관리를
+ 
+위해
+ 
+BaseEntity
+(
+createdAt
+, 
+updatedAt
+)를 
+상속받도록
+ 
+구현하였다
+.
+분석
+ 
+상태는
+ PENDING → PROCESSING → DONE / FAILED 
+형태의
+ 
+상태
+ 
+머신
+(State Machine) 
+구조로
+ 
+관리하여
+ 
+분석
+ 
+진행
+ 
+상황을
+ 
+추적할
+ 수 
+있도록
+ 
+설계하였다
+.
+AI 
+분석
+ 
+결과인
+ 
+patterns와
+ recommendations 
+데이터는
+ JSON TEXT 
+형태로
+ 
+저장하였으며
+, Jackson 
+ObjectMapper를
+ 
+활용하여
+ 
+직렬화
+ 및 
+역직렬화를
+         
+      
+수행하였다
+.
+비동기
+ 
+처리
+ 
+구조를
+ 
+적용하여
+ POST /
+api
+/analysis 
+요청
+ 시 
+분석
+ 
+데이터를
+ 
+저장
+(PENDING)
+하고
+, 
+이후
+ AI 
+서버
+ /process-analyze 
+호출
+(PROCESSING),                 
+AI 
+서버의
+ /internal/analysis-callbacks/{id} 
+콜백
+ 
+응답
+ 
+수신
+ 후 complete() 
+호출
+(DONE) 
+흐름으로
+ 
+동작하도록
+ 
+구성하였다
+.
+AI 
+서버
+ 
+호출
+ 
+실패
+ 
+시에는
+ fail()을 
+호출하여
+ 
+상태를
+ 
+FAILED로
+ 
+변경하도록
+ 
+처리하였으며
+, 
+시스템
+ 
+전체
+ 
+장애로
+ 
+확산되지
+ 
+않도록
+ 
+예외
+ 
+전파
+ 
+없이
+ 
+관리하도록
+                
+설계하였다
+.
+최신
+ 
+분석
+ 
+결과
+ 
+조회를
+ 
+위해
+ 
+AnalysisRepository.findTopByOrderByCreatedAtDesc
+() 
+기반의
+ GET /
+api
+/analysis/latest 
+기능을
+ 
+구현하였다
+.
+현재
+ AI 
+서버
+ 
+분석
+ 
+엔드포인트는
+ 
+AiAnalysisClient.requestProcessAnalysis
+() 
+내부에서
+ /process-
+analyze를
+ 
+임시
+ 
+사용
+ 
+중이며
+, 
+최종
+ AI 
+서버
+ API 
+확정
+ 
+이후
+ 
+교체
+ 
+가능하도록
+ 
+구조를
+ 
+분리하였다
+.
+18
+--- Slide 19 ---
+6. Frontend API 연동 구조
+Frontend
+ API 구조 구성
+기존 정적 UI를 실제 Backend
+ API와 연결하기    위한 연동 구조를 추가하였다.
+공통 API 클라이언트를 구성하여 Frontend에서 Backend 서버와 통신할 수 있도록 구현하였다.
+로그인, 계정 관리, Dashboard, 검사 이력, 알림, 생산라인, 교대조 기능별 API 모듈을 분리하여 작성하였다.
+API 기능을 역할별로 분리하여 유지보수성과 확장성을 높일 수 있도록 구성하였
+API Client
+Dashboard
+Inspection
+ Notification
+Auth Module
+19
+--- Slide 20 ---
+6. JWT 인증 및 API 요청 흐름
+JWT 기반
+ 인증 구조 구현
+로그인 성공 시 Backend에서
+ 발급한 access token을 localStorage에 저장하도록 구성하였다.
+이후 API 요청 시 Authorization 헤더에 access token이 자동으로 포함되도록 처리하였다.
+이를 통해 관리자 및 작업자 기능에서 JWT 기반 인증 요청 흐름을 사용할 수 있도록 구현하였다.
+공통 API 클라이언트 기반으로 인증이 필요한 API 요청을 일관되게 처리할 수 있도록 구성하였다.
+Login
+access token 저장
+Authorization Header
+자동 포함
+20
+--- Slide 21 ---
+6. 응답 어댑터 및 데이터 연동
+Backend
+ 응답 데이터 연동 구조
+Backend
+ API 응답 데이터를 기존 Frontend 화면 구조에 맞게 변환하는 Adapter 구조를 추가하였다.
+계정 목록, Dashboard 통계, 검사 이력, 검사 상세, 알림 목록 데이터를 화면 렌더링에 적합한 형태로 매핑하였다.
+이를 통해 Backend 응답 구조와 Frontend UI 구조 차이를 최소화할 수 있도록 구성하였다.
+API 응답 구조 변경 시 화면 전체 수정 없이 Adapter 레이어에서 대응 가능하도록 설계하였다.
+Frontend-Backend
+ API 연동 테스트
+로컬 Backend
+ 서버를 ngrok으로 터널링하여 Frontend에서 API 연결을 테스트하였다.
+로그인, Dashboard 조회, 계정 목록 조회, 검사 목록 및 상세 조회, 알림 조회 및 읽음 처리 흐름을 검증하였다.
+API 요청 실패 시 사용자에게 에러 메시지를 표시하도록 처리하여 서버 연결 실패 및 응답 오류 상황을 확인할 수 있도록 구성하였다.
+실제 서비스 흐름 기준으로 Frontend · Backend 통합 연동 테스트를 진행하였다.
+정적 UI 단계에서 실제 Backend
+ 데이터 연동 단계로 확장
+21
+--- Slide 22 ---
+6. UI - 로그인
+22
+--- Slide 23 ---
+6. UI - 현장근로자
+23
+실시간 모니터링 페이지
+검사결과 상세페이지
+--- Slide 24 ---
+6. UI - 현장근로자 (모바일)
+24
+모바일 환경에서의 실시간 모니터링
+모바일 환경에서의 검사 결과 상세
+--- Slide 25 ---
+6. UI - 관리자
+25
+대시보드 페이지
+검사 이력 조회 페이지
+--- Slide 26 ---
+6. UI - 관리자
+26
+사용자 계정 관리 페이지
+--- Slide 27 ---
+Backend
+ 응답 데이터 연동 구조
+6
+. 주요 이슈 및 해결 과정
+Frontend · Backend · AI 서버 간 실제 데이터 흐름 검증 진행
+Callback 기반 AI 분석 구조 안정화 작업 수행
+Dashboard 및 실시간 알림 기능 연동 테스트 진행
+Grad-CAM 결과를 포함한 검사 상세 화면 검증 수행
+7. 주요 이슈 및 해결 과정
+이슈
+해결 내용
+Frontend와 Backend 응답 구조 차이
+응답 변환 Adapter를 추가하여 화면 데이터 구조와 매핑
+API 인증 토큰 처리 문제
+JWT 기반 Authorization Header 자동 포함 구조 구현
+로컬 서버 연동 문제
+ngrok 기반 외부 접근 환경 구성 및 API 연동 테스트 진행
+Swin Transformer Grad-CAM 적용 문제
+target layer 및 reshape 구조를 조정하여 시각화 구현
+Dashboard 통계 데이터 부족
+별도 GET /api/dashboard API 추가 및 통계 집계 구조 구현
+사용자 API와 내부 API 인증 충돌
+JWT / API Key 기반 인증 구조를 분리하여 해결
+AI 결과와 Backend 데이터 연동 문제
+Callback 기반 분석 흐름(/internal/callbacks) 구성
+AI 서버 URL 변경 문제
+application 설정 분리를 통해 ngrok 변경 대응
+27
+--- Slide 28 ---
+한 사이클에 15000개인 validation 데이터셋을 한번에 처리하기보다는 16000개를 랜덤으로
+정상 1500개, 불량 1500개를 랜덤으로 뽑아 patch 개수를 감소하고 속도를 높임 
+매번 할때 첫 변수 F1 수치가 -1이니깐 아무리 전이 좋든 나쁘든 무조건 best가 초기화되고 다시 처음걸로 
+적용되는 변수 발생.
+이를 학습당 성능 개선된 best모델과 그때 F1값을 동시에 저장함으로써 해결
+VAL 배치 3000개 랜덤화
+best모델의 F1도 best모델과 함께 저장
+기존 데이터가 json과 전부 일대일 매칭이 되지 않는 현상이 나타남.
+그래서 찾지 못한 이미지 데이터에 대해 자꾸 끊기는 학습 오류가 빈번하게 나타나 _getitem_ 함수를 추가해 해결
+학습 이미지 끊기는 현상
+01
+02
+03
+8. 진행 상황 및 성능 개선
+28
+--- Slide 29 ---
+??
+??
+??
+??
+??
+??
+04
+05
+06
+8. 진행 상황 및 성능 개선
+29
+--- Slide 30 ---
+Q&A
+감사합니다
+30
