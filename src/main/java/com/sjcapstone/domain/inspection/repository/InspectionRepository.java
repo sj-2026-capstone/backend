@@ -2,6 +2,7 @@ package com.sjcapstone.domain.inspection.repository;
 
 import com.sjcapstone.domain.dashboard.dto.projection.DailyDefectStatsProjection;
 import com.sjcapstone.domain.dashboard.dto.projection.LineDefectStatsProjection;
+import com.sjcapstone.domain.inspection.entity.ActionStatus;
 import com.sjcapstone.domain.inspection.entity.Inspection;
 import com.sjcapstone.domain.inspection.entity.InspectionStatus;
 import org.springframework.data.domain.Page;
@@ -12,6 +13,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface InspectionRepository extends JpaRepository<Inspection, Long> {
 
@@ -24,6 +26,12 @@ public interface InspectionRepository extends JpaRepository<Inspection, Long> {
     Page<Inspection> findAllByLineIdAndStatusOrderByCreatedAtDesc(Long lineId, InspectionStatus status, Pageable pageable);
 
     List<Inspection> findTop5ByHasDefectTrueAndStatusOrderByInspectedAtDesc(InspectionStatus status);
+
+    List<Inspection> findTop5ByLineIdAndHasDefectTrueAndStatusOrderByInspectedAtDesc(Long lineId, InspectionStatus status);
+
+    boolean existsByLineIdAndHasDefectTrueAndActionStatus(Long lineId, ActionStatus actionStatus);
+
+    Optional<Inspection> findTopByLineIdAndStatusOrderByInspectedAtDesc(Long lineId, InspectionStatus status);
 
     @Query("SELECT i FROM Inspection i LEFT JOIN FETCH i.line LEFT JOIN FETCH i.shift " +
            "WHERE i.status = :status AND i.createdAt >= :after ORDER BY i.createdAt DESC")

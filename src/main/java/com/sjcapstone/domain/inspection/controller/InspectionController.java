@@ -45,15 +45,13 @@ public class InspectionController {
                 .body(CommonResponse.ok("검사가 생성되었습니다.", response));
     }
 
-    // 최근 불량 5개 조회 — ADMIN (실시간 모니터링)
+    // 최근 불량 5개 조회 — WORKER(자신의 라인), ADMIN(전체)
     @GetMapping("/latest")
     public ResponseEntity<CommonResponse<List<RecentDefectResponse>>> getRecentDefects(
             @AuthenticationPrincipal CustomUserDetails userDetails) {
 
-        if (extractRole(userDetails) != UserRole.ADMIN) {
-            throw new CustomException(ErrorCode.FORBIDDEN);
-        }
-        return ResponseEntity.ok(CommonResponse.ok("최근 불량 조회 성공", inspectionService.getRecentDefects()));
+        return ResponseEntity.ok(CommonResponse.ok("최근 불량 조회 성공",
+                inspectionService.getRecentDefects(userDetails.getUserId(), extractRole(userDetails))));
     }
 
     // 이미지 업로드 + 검사 생성 — ADMIN (카메라 미연결 시 테스트용)

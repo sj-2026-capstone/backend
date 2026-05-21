@@ -24,5 +24,5 @@ public interface InspectionService {
 
     void resolveAction(Long inspectionId, Long userId, UserRole role);
 
-    List<RecentDefectResponse> getRecentDefects();
+    List<RecentDefectResponse> getRecentDefects(Long userId, UserRole role);
 }

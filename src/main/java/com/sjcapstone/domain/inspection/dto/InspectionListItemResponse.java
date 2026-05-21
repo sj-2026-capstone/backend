@@ -25,6 +25,7 @@ public class InspectionListItemResponse {
     private String defectDisplayName;
     private Boolean hasDefect;
     private ActionStatus actionStatus;
+    private String imageUrl;
     private LocalDateTime inspectedAt;
     private LocalDateTime createdAt;
 
@@ -40,6 +41,7 @@ public class InspectionListItemResponse {
                 .defectDisplayName(inspection.getDefectType() != null ? inspection.getDefectType().getDisplayName() : null)
                 .hasDefect(inspection.getHasDefect())
                 .actionStatus(inspection.getActionStatus())
+                .imageUrl(inspection.getImageUrl())
                 .inspectedAt(inspection.getInspectedAt())
                 .createdAt(inspection.getCreatedAt())
                 .build();

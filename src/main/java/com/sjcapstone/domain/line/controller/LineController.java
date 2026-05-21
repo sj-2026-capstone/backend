@@ -1,6 +1,7 @@
 package com.sjcapstone.domain.line.controller;
 
 import com.sjcapstone.domain.line.dto.LineResponse;
+import com.sjcapstone.domain.line.dto.LineStatusResponse;
 import com.sjcapstone.domain.line.service.LineService;
 import com.sjcapstone.global.response.CommonResponse;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,12 @@ public class LineController {
     public ResponseEntity<CommonResponse<List<LineResponse>>> getLines() {
         List<LineResponse> response = lineService.getLines();
         return ResponseEntity.ok(CommonResponse.ok("라인 목록 조회 성공", response));
+    }
+
+    @GetMapping("/status")
+    public ResponseEntity<CommonResponse<List<LineStatusResponse>>> getLineStatuses() {
+        List<LineStatusResponse> response = lineService.getLineStatuses();
+        return ResponseEntity.ok(CommonResponse.ok("라인 상태 조회 성공", response));
     }
 
     @GetMapping("/{lineId}")

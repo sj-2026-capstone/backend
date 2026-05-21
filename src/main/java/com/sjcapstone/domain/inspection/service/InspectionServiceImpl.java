@@ -219,7 +219,20 @@ public class InspectionServiceImpl implements InspectionService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<RecentDefectResponse> getRecentDefects() {
+    public List<RecentDefectResponse> getRecentDefects(Long userId, UserRole role) {
+        if (role == UserRole.WORKER) {
+            User worker = userRepository.findByIdAndDeletedAtIsNull(userId)
+                    .orElseThrow(UserNotFoundException::new);
+            Long workerLineId = worker.getLine() != null ? worker.getLine().getId() : null;
+            if (workerLineId == null) {
+                return List.of();
+            }
+            return inspectionRepository
+                    .findTop5ByLineIdAndHasDefectTrueAndStatusOrderByInspectedAtDesc(workerLineId, InspectionStatus.DONE)
+                    .stream()
+                    .map(RecentDefectResponse::from)
+                    .collect(Collectors.toList());
+        }
         return inspectionRepository
                 .findTop5ByHasDefectTrueAndStatusOrderByInspectedAtDesc(InspectionStatus.DONE)
                 .stream()
