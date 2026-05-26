@@ -3,6 +3,7 @@ package com.sjcapstone.domain.dashboard.service;
 import com.sjcapstone.domain.dashboard.dto.*;
 import com.sjcapstone.domain.dashboard.dto.projection.DailyDefectStatsProjection;
 import com.sjcapstone.domain.dashboard.dto.projection.LineDefectStatsProjection;
+import com.sjcapstone.domain.inspection.entity.ActionStatus;
 import com.sjcapstone.domain.inspection.repository.InspectionRepository;
 import com.sjcapstone.domain.line.entity.Line;
 import com.sjcapstone.domain.line.repository.LineRepository;
@@ -97,10 +98,23 @@ public class DashboardServiceImpl implements DashboardService {
                 })
                 .collect(Collectors.toList());
 
+        long totalDefects = inspectionRepository.countByHasDefectTrue();
+        long unresolvedCount = inspectionRepository.countByActionStatus(ActionStatus.UNRESOLVED);
+        long resolvedCount = inspectionRepository.countByActionStatus(ActionStatus.RESOLVED);
+        double completionRate = totalDefects == 0 ? 0.0
+                : Math.round((double) resolvedCount / totalDefects * 100 * 10) / 10.0;
+
+        ActionSummaryResponse actionSummary = ActionSummaryResponse.builder()
+                .total(totalDefects)
+                .unresolvedCount(unresolvedCount)
+                .resolvedCount(resolvedCount)
+                .completionRate(completionRate)
+                .build();
+
         return DashboardResponse.builder()
                 .summary(summary)
                 .defectRateTrend(defectRateTrend)
-                .actionSummary(ActionSummaryResponse.empty())
+                .actionSummary(actionSummary)
                 .lineDefectRates(lineDefectRates)
                 .lastUpdatedAt(LocalDateTime.now())
                 .build();

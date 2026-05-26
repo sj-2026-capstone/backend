@@ -124,10 +124,10 @@
 | 대시보드 통합 조회 | ADMIN | `GET /api/dashboard` |
 
 > - 별도 엔티티 없이 **검사 데이터 집계 쿼리** 기반
-> - 응답 구조: `summary` (요약 지표) / `defectRateTrend` (최근 7일 일별 불량률) / `actionSummary` (조치 현황, 현재 stub) / `lineDefectRates` (라인별 불량률) / `lastUpdatedAt`
+> - 응답 구조: `summary` (요약 지표) / `defectRateTrend` (최근 7일 일별 불량률) / `actionSummary` (조치 현황) / `lineDefectRates` (라인별 불량률) / `lastUpdatedAt`
 > - 불량 판정 기준: `Inspection.hasDefect = true`
 > - 변화율(`totalInspectionChangeRate`, `defectRateChange`): 최근 7일 vs 이전 7일 비교
-> - `actionSummary`는 조치 도메인 미구현으로 전부 0 반환; 향후 `DefectAction`/`InspectionAction` 도메인 추가 필요
+> - `actionSummary`: `Inspection.actionStatus` 기반 실제 집계 — `total`(전체 불량 수) / `unresolvedCount`(미처리) / `resolvedCount`(처리 완료) / `completionRate`(처리율 %)
 
 ### 6. 공정 개선 분석 (Analysis)
 
@@ -498,7 +498,7 @@ src/main/java/com/sjcapstone/
 - **집계 항목**: 전체/오늘 검사 수, 불량률, 최근 7일 불량률 추이, 라인별 불량률
 - **변화율 산정**: 최근 7일 vs 이전 7일 구간 비교
 - `InspectionRepository`에 native query 추가 (`findDailyDefectStatsSince`, `findLineDefectStats`)
-- `actionSummary`는 현재 stub (0값) — 향후 `DefectAction`/`InspectionAction` 도메인 추가 필요
+- `actionSummary`: `InspectionRepository.countByActionStatus(ActionStatus)`로 실제 집계 — `total` / `unresolvedCount` / `resolvedCount` / `completionRate` 반환
 
 ### Analysis (공정 개선 분석)
 - `process_analyses` 테이블, `BaseEntity` 상속 (createdAt, updatedAt)
@@ -680,7 +680,7 @@ file.grad-cam-dir=/Users/kimsohee/PycharmProjects/AI/ai/grad_cam_images  # AI �
 | 내부 시스템 인증 방식 | API Key 정적 관리 vs 서비스 토큰 발급 방식 결정 필요 |
 | 검사 상태 머신 정의 | `PENDING → PROCESSING → DONE/FAILED` 전환 규칙 명확화 |
 | AI 분석 서버 연동 방식 | `TransactionTemplate`으로 DB 트랜잭션을 AI HTTP 호출 전 커밋 분리 완료 — 커넥션 풀 고갈 해결. 추가 트래픽 증가 시 비동기 메시지 큐 전환 검토 가능 |
-| dashboard actionSummary | 조치 도메인 미구현 — `DefectAction`/`InspectionAction` 추가 후 실제 집계로 교체 필요 |
+| dashboard actionSummary | ~~조치 도메인 미구현~~ — `Inspection.actionStatus` 기반 실제 집계로 교체 완료 (2026-05-27) |
 | dashboard 데이터 정합성 | 현재 실시간 집계 쿼리 — 데이터 증가 시 Redis 캐싱 여부 검토 필요 |
 | inspection과 frame의 관계 | 프레임을 inspection 하위로 볼지, 독립 엔티티로 볼지 |
 | Redis 도입 시기 | refresh token 저장 용도 |

@@ -514,7 +514,10 @@ GET /api/dashboard
     { "date": "2026-05-14", "inspectionCount": 18, "defectCount": 3, "defectRate": 16.7 }
   ],
   "actionSummary": {
-    "total": 0, "resolved": 0, "unresolved": 0
+    "total": 15,
+    "unresolvedCount": 8,
+    "resolvedCount": 7,
+    "completionRate": 46.7
   },
   "lineDefectRates": [
     { "lineId": 1, "lineName": "A라인", "defectRate": 0.12 }

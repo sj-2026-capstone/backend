@@ -42,6 +42,8 @@ public interface InspectionRepository extends JpaRepository<Inspection, Long> {
 
     long countByHasDefectTrue();
 
+    long countByActionStatus(ActionStatus status);
+
     long countByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
 
     @Query("SELECT COUNT(i) FROM Inspection i WHERE i.createdAt >= :start AND i.createdAt < :end AND i.hasDefect = true")
