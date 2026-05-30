@@ -15,5 +15,6 @@ public class DashboardResponse {
     private List<DefectRateTrendItemResponse> defectRateTrend;
     private ActionSummaryResponse actionSummary;
     private List<LineDefectRateResponse> lineDefectRates;
+    private LatestAnalysisSummaryResponse latestAnalysis;
     private LocalDateTime lastUpdatedAt;
 }
