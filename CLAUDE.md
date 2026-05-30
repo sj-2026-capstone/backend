@@ -124,12 +124,15 @@
 | 대시보드 통합 조회 | ADMIN | `GET /api/dashboard` |
 
 > - 별도 엔티티 없이 **검사 데이터 집계 쿼리** 기반
-> - 응답 구조: `summary` (요약 지표) / `defectRateTrend` (최근 7일 일별 불량률) / `actionSummary` (조치 현황) / `lineDefectRates` (라인별 불량률) / `lastUpdatedAt`
+> - 응답 구조: `summary` (요약 지표) / `defectRateTrend` (최근 7일 일별 불량률) / `actionSummary` (조치 현황) / `lineDefectRates` (라인별 불량률) / `latestAnalysis` (최신 RAG 분석 요약) / `lastUpdatedAt`
 > - 불량 판정 기준: `Inspection.hasDefect = true`
 > - 변화율(`totalInspectionChangeRate`, `defectRateChange`): 최근 7일 vs 이전 7일 비교
 > - `actionSummary`: `Inspection.actionStatus` 기반 실제 집계 — `total`(전체 불량 수) / `unresolvedCount`(미처리) / `resolvedCount`(처리 완료) / `completionRate`(처리율 %)
+> - `latestAnalysis`: `AnalysisRepository.findTopByRagUsedTrueOrderByCreatedAtDesc()`로 조회 — `analysisId`, `status`, `fromDate`, `toDate`, `totalInspectionCount`, `totalDefectCount`, `patternCount`, `highestSeverity`, `analyzedAt` 반환. 이력 없으면 `{ analysisId: null, status: null }` 반환
 
 ### 6. 공정 개선 분석 (Analysis)
+
+#### 6-1. 레거시 분석 (RAG 미적용)
 
 | 기능 | 주체 | 엔드포인트 |
 |---|---|---|
@@ -140,13 +143,35 @@
 | 공정 분석 완료 콜백 수신 (예비용) | AI 분석 서버 | `POST /internal/analysis-callbacks/{analysisId}` |
 
 > - **처리 흐름 (OpenAI 직접 연동)**: `POST /api/analysis` → 최근 30일 검사 데이터 수집 → `OpenAiClient`로 OpenAI API(`gpt-4o-mini`) 직접 호출 → 결과 즉시 DB 저장 → `GET /api/analysis/latest`로 조회
-> - **DB 커넥션 분리**: `startAnalysis()`는 `@Transactional(propagation = NOT_SUPPORTED)` + `TransactionTemplate`으로 검사 데이터 조회·결과 저장·OpenAI 호출을 트랜잭션별 분리 → 커넥션 풀 고갈 방지
 > - `inspection`과 연결되지만 목적·생명주기가 달라 **독립 도메인**으로 분리
 > - 상태 머신: `PENDING → PROCESSING → DONE / FAILED`
 > - 결과는 `patterns`(발견된 패턴 목록)와 `recommendations`(추천 조치 목록)로 구성 — DB에 JSON TEXT로 저장
 > - `SeverityLevel`: `HIGH`(높음) / `MEDIUM`(중간) / `LOW`(관찰)
-> - **OpenAI 프롬프트 구성**: 라인별·불량 유형별·교대조별 집계 통계를 텍스트로 구성해 전달
 > - AI 서버 콜백 엔드포인트(`/internal/analysis-callbacks/{id}`)는 코드에 유지되어 있으나 현재 흐름에서는 미사용
+
+#### 6-2. RAG 기반 공정 분석 (신규)
+
+| 기능 | 주체 | 엔드포인트 |
+|---|---|---|
+| RAG 공정 분석 시작 | ADMIN | `POST /api/analysis/process/start` |
+| RAG 최신 분석 결과 조회 | ADMIN | `GET /api/analysis/process/latest` |
+| RAG 분석 상세 조회 | ADMIN | `GET /api/analysis/process/{analysisId}` |
+| RAG 분석 이력 목록 조회 (페이징) | ADMIN | `GET /api/analysis/process/history?page=&size=` |
+
+> - **처리 흐름 (RAG + OpenAI)**:
+>   1. `POST /api/analysis/process/start` → `ProcessAnalysis` 저장(`ragUsed=true`, PENDING→PROCESSING)
+>   2. 기간/라인 조건으로 `InspectionRepository` 집계 쿼리 5종 실행
+>   3. `SimpleRagChunkRetriever`가 집계 결과를 텍스트 청크로 변환 + 관련성 점수 계산 → 상위 5개 선별
+>   4. 선별된 청크를 프롬프트에 삽입 → `OpenAiClient.analyzeProcess(prompt)` 호출 (temperature=0.5)
+>   5. 응답 JSON 파싱 → `complete()` 호출(DONE) → 결과 저장
+> - **DB 커넥션 분리**: `startAnalysis()`는 `NOT_SUPPORTED` + `TransactionTemplate` 패턴 — 각 DB 작업을 개별 트랜잭션으로 분리, OpenAI 호출 중 커넥션 미점유
+> - `ragUsed=true` 플래그로 레거시 분석과 구분 — 기존 `/api/analysis/**` 엔드포인트에 영향 없음
+> - **요청 파라미터** (모두 선택): `fromDate`, `toDate` (미입력 시 최근 30일), `lineId` (미입력 시 전체 라인)
+> - **패턴 응답**: `patternId`, `title`, `description`, `severity`, `relatedLine`, `relatedTimeRange`, `metric`, `evidenceSummary`
+> - **추천 응답**: `priority`, `title`, `description`, `targetLine`, `expectedEffect`, `relatedPatternIds`
+> - **메타데이터**: `analysisBaseTime`, `fromDate`, `toDate`, `totalInspectionCount`, `totalDefectCount`, `modelName`, `ragUsed`
+> - **RAG 청크 5종**: `LINE_STATS` / `SHIFT_STATS` / `HOUR_STATS` / `DEFECT_TYPE_STATS` / `WEEKLY_TREND`
+> - `RagChunkRetriever` 인터페이스 뒤에 `SimpleRagChunkRetriever` 구현체 — 향후 pgvector/Elasticsearch/Qdrant로 교체 가능
 
 ### 7. 내부 시스템 연동 API (Internal)
 
@@ -322,24 +347,40 @@ src/main/java/com/sjcapstone/
 │   │           └── LineDefectStatsProjection.java
 │   └── analysis/              # AI 공정 개선 분석 요청/결과 관리 — 완료
 │       ├── controller/
-│       │   └── AnalysisController.java
+│       │   ├── AnalysisController.java          # 레거시 /api/analysis/**
+│       │   └── ProcessAnalysisController.java   # RAG 기반 /api/analysis/process/**
 │       ├── service/
 │       │   ├── AnalysisService.java
-│       │   └── AnalysisServiceImpl.java
+│       │   ├── AnalysisServiceImpl.java
+│       │   ├── ProcessAnalysisService.java      # RAG 분석 서비스 인터페이스
+│       │   └── ProcessAnalysisServiceImpl.java  # RAG 분석 구현체
 │       ├── repository/
-│       │   └── AnalysisRepository.java
+│       │   └── AnalysisRepository.java          # ragUsed 구분 쿼리 포함
 │       ├── entity/
-│       │   ├── ProcessAnalysis.java
+│       │   ├── ProcessAnalysis.java             # from_date, to_date, filter_line_id, total_inspection_count, total_defect_count, model_name, rag_used 컬럼 추가
 │       │   ├── AnalysisStatus.java  (enum: PENDING/PROCESSING/DONE/FAILED)
 │       │   └── SeverityLevel.java   (enum: HIGH/MEDIUM/LOW)
 │       ├── dto/
-│       │   ├── PatternDto.java
-│       │   ├── RecommendationDto.java
+│       │   ├── PatternDto.java                       # 레거시용
+│       │   ├── RecommendationDto.java                # 레거시용
 │       │   ├── ProcessAnalysisCallbackRequest.java
 │       │   ├── AnalysisStartResponse.java
 │       │   ├── AnalysisResponse.java
 │       │   ├── AnalysisListItemResponse.java
-│       │   └── AnalysisPageResponse.java
+│       │   ├── AnalysisPageResponse.java
+│       │   ├── ProcessPatternDto.java                # RAG 패턴: patternId, title, description, severity, relatedLine, relatedTimeRange, metric, evidenceSummary
+│       │   ├── ProcessRecommendationDto.java         # RAG 추천: priority, title, description, targetLine, expectedEffect, relatedPatternIds
+│       │   ├── AnalysisMetadataDto.java              # analysisBaseTime, fromDate, toDate, totalInspectionCount, totalDefectCount, modelName, ragUsed
+│       │   ├── ProcessAnalysisStartRequest.java      # fromDate?, toDate?, lineId? (모두 선택)
+│       │   ├── ProcessAnalysisResponse.java          # RAG 분석 상세 응답
+│       │   ├── ProcessAnalysisListItemResponse.java  # RAG 분석 목록 항목
+│       │   ├── ProcessAnalysisPageResponse.java      # RAG 분석 페이징 응답
+│       │   └── projection/
+│       │       ├── LineDefectRangeProjection.java    # lineId, lineName, inspectionCount, defectCount
+│       │       ├── ShiftDefectRangeProjection.java   # shiftName, startTime, endTime, inspectionCount, defectCount
+│       │       ├── HourlyDefectProjection.java       # hour, inspectionCount, defectCount
+│       │       ├── DefectTypeRangeProjection.java    # defectType, defectCount
+│       │       └── WeeklyDefectProjection.java       # week, inspectionCount, defectCount
 │       └── exception/
 │           └── AnalysisNotFoundException.java
 ├── internal/                  # 내부 시스템 전용 API (별도 보안 채널)
@@ -363,7 +404,12 @@ src/main/java/com/sjcapstone/
     │   ├── AiAnalysisClient.java    # AI 서버 HTTP 호출 (POST /analyze — 검사 분석용)
     │   ├── AiAnalysisRequest.java   # 검사 분석 요청 DTO { inspectionId, imageUrl, callbackUrl }
     │   ├── AiProcessAnalysisRequest.java  # 공정 분석 요청 DTO { analysisId, callbackUrl } (현재 미사용)
-    │   └── OpenAiClient.java        # OpenAI API 직접 호출 (공정 개선 분석용, gpt-4o-mini)
+    │   └── OpenAiClient.java        # OpenAI API 직접 호출 — analyze()(레거시), analyzeProcess()(RAG용, temperature=0.5)
+    ├── rag/
+    │   ├── RagQuery.java            # { from, to, lineId, topN }
+    │   ├── RagChunk.java            # { chunkId, type(ChunkType), content, relevanceScore }
+    │   ├── RagChunkRetriever.java   # 인터페이스 — 향후 Vector DB 교체 포인트
+    │   └── SimpleRagChunkRetriever.java  # SQL 집계 기반 구현체, 5종 청크 + 관련성 점수 계산
     ├── entity/
     │   └── BaseEntity.java          # createdAt, updatedAt (JPA Auditing)
     ├── exception/
@@ -405,7 +451,8 @@ src/main/java/com/sjcapstone/
 /api/notifications/{id}/read          → 단건 읽음 처리 (WORKER, ADMIN)
 /api/notifications/read-all           → 전체 읽음 처리 (WORKER, ADMIN)
 /api/dashboard/**          → 대시보드 통계 (ADMIN 전용)
-/api/analysis/**           → 공정 개선 분석 (ADMIN 전용)
+/api/analysis/**           → 공정 개선 분석 레거시 (ADMIN 전용)
+/api/analysis/process/**   → RAG 기반 공정 분석 (ADMIN 전용)
 
 /internal/frames/**                  → 프레임 수집 (내부 서비스 키)
 /internal/callbacks/**               → 검사 AI 분석 콜백 (내부 서비스 키)
@@ -495,12 +542,16 @@ src/main/java/com/sjcapstone/
 ### Dashboard (대시보드/통계)
 - 별도 엔티티 없이 검사 데이터 집계 쿼리 기반
 - `GET /api/dashboard` — ADMIN 전용, 단일 엔드포인트로 전체 대시보드 데이터 반환
-- **집계 항목**: 전체/오늘 검사 수, 불량률, 최근 7일 불량률 추이, 라인별 불량률
+- **집계 항목**: 전체/오늘 검사 수, 불량률, 최근 7일 불량률 추이, 라인별 불량률, 최신 RAG 분석 요약
 - **변화율 산정**: 최근 7일 vs 이전 7일 구간 비교
 - `InspectionRepository`에 native query 추가 (`findDailyDefectStatsSince`, `findLineDefectStats`)
 - `actionSummary`: `InspectionRepository.countByActionStatus(ActionStatus)`로 실제 집계 — `total` / `unresolvedCount` / `resolvedCount` / `completionRate` 반환
+- `latestAnalysis`: `AnalysisRepository.findTopByRagUsedTrueOrderByCreatedAtDesc()`로 최신 RAG 분석 요약 반환 (`LatestAnalysisSummaryResponse`) — 이력 없으면 `none()` 반환
+- `DashboardServiceImpl` 의존성: `InspectionRepository`, `LineRepository`, `AnalysisRepository`, `ObjectMapper`
 
 ### Analysis (공정 개선 분석)
+
+#### 레거시 분석 (`/api/analysis/**`)
 - `process_analyses` 테이블, `BaseEntity` 상속 (createdAt, updatedAt)
 - 상태 머신: `PENDING → PROCESSING → DONE / FAILED`
 - `patterns`(JSON TEXT), `recommendations`(JSON TEXT) — Jackson ObjectMapper로 직렬화/역직렬화
@@ -514,6 +565,25 @@ src/main/java/com/sjcapstone/
 - **DB 커넥션 분리**: `startAnalysis()`는 `NOT_SUPPORTED` + `TransactionTemplate` 패턴으로 각 DB 작업을 개별 트랜잭션으로 분리
 - `AnalysisRepository.findTopByOrderByCreatedAtDesc()` — `GET /api/analysis/latest`용
 - `processCallback()` 메서드는 코드에 유지 (외부 AI 서버 콜백 수신 예비용) — 현재 흐름에서는 미호출
+
+#### RAG 기반 분석 (`/api/analysis/process/**`)
+- 동일한 `process_analyses` 테이블 공유, `ragUsed=true`로 구분
+- **ProcessAnalysis 엔티티 추가 컬럼**: `from_date`, `to_date`, `filter_line_id`, `total_inspection_count`, `total_defect_count`, `model_name`, `rag_used`
+- **AnalysisRepository 추가 쿼리**:
+  - `findByIdAndRagUsedTrue(Long id)` — RAG 분석 상세 조회 (레거시 id 차단)
+  - `findTopByRagUsedTrueOrderByCreatedAtDesc()` — 최신 RAG 분석 (대시보드용)
+  - `findByRagUsedTrueOrderByCreatedAtDesc(Pageable)` — RAG 분석 이력 페이징
+- **InspectionRepository 추가 쿼리** (5종 집계 + 2종 카운트):
+  - `findLineDefectStatsByRange(from, to, lineId)` → `LineDefectRangeProjection`
+  - `findShiftDefectStatsByRange(from, to, lineId)` → `ShiftDefectRangeProjection`
+  - `findHourlyDefectStatsByRange(from, to, lineId)` → `HourlyDefectProjection`
+  - `findDefectTypeStatsByRange(from, to, lineId)` → `DefectTypeRangeProjection`
+  - `findWeeklyDefectStatsByRange(from, to, lineId)` → `WeeklyDefectProjection`
+  - `countByStatusAndCreatedAtBetween(status, from, to)`
+  - `countDefectsByStatusAndRange(status, from, to)`
+- **RAG 청크 관련성 점수 기준**: lineId 일치 +8~10, 불량률 >15% +5, 불량 건수 많음 +4, 주간 추이 증가 +5
+- **OpenAiClient 메서드 분리**: `analyze(prompt)` (레거시, temperature=0.7) / `analyzeProcess(prompt)` (RAG용, temperature=0.5, 더 엄격한 JSON 스키마 요구)
+- `ProcessAnalysisServiceImpl.startAnalysis()`: `@Transactional(propagation = NOT_SUPPORTED)` + `TransactionTemplate` 동일 패턴
 
 ---
 
@@ -531,7 +601,7 @@ src/main/java/com/sjcapstone/
 - `/images/**` — 인증 없이 접근 허용 (업로드 이미지 정적 서빙)
 - `/api/admin/**` — `ADMIN` 권한 필요 (`hasRole("ADMIN")`)
 - `/api/dashboard/**` — `ADMIN` 권한 필요 (`hasRole("ADMIN")`)
-- `/api/analysis/**` — `ADMIN` 권한 필요 (`hasRole("ADMIN")`)
+- `/api/analysis/**` — `ADMIN` 권한 필요 (`hasRole("ADMIN")`) — 레거시 및 RAG 분석 모두 포함 (`/api/analysis/process/**` 포함)
 - 나머지 모든 엔드포인트 (`/api/notifications/**`, `/api/inspections/**` 등) — JWT 필요 (WORKER, ADMIN 모두 접근 가능)
 
 ---
@@ -666,8 +736,10 @@ file.grad-cam-dir=/Users/kimsohee/PycharmProjects/AI/ai/grad_cam_images  # AI �
 | notification — entity, SSE 구독, 필터/페이징 목록 조회, 미확인 개수, 단건/전체 읽음 처리, 전체 사용자(ADMIN+WORKER) 발송, SSE 커넥션 풀 고갈 버그 수정 | 완료 |
 | inspection — entity, 상태 머신, CRUD, 분석 시작, AI 서버 HTTP 호출, 콜백 수신, 조치 완료(`save` 명시적 호출), 최근 불량 조회, 이미지 업로드 | 완료 |
 | global/client — AiAnalysisClient (검사 분석, RestTemplate), OpenAiClient (공정 분석, gpt-4o-mini 직접 호출) | 완료 |
-| dashboard — GET /api/dashboard, 집계 쿼리 (요약/추이/라인별), projection | 완료 |
-| analysis — entity, 상태 머신, CRUD, OpenAI 직접 연동, JSON 직렬화, DB 커넥션 분리 | 완료 |
+| dashboard — GET /api/dashboard, 집계 쿼리 (요약/추이/라인별), projection, latestAnalysis(RAG 분석 요약) 추가 | 완료 |
+| analysis (레거시) — entity, 상태 머신, CRUD, OpenAI 직접 연동, JSON 직렬화, DB 커넥션 분리 | 완료 |
+| analysis/process (RAG) — ProcessAnalysisController/Service/ServiceImpl, 5종 RAG 청크, SimpleRagChunkRetriever, ProcessAnalysis 엔티티 확장, 신규 DTO 7종 + Projection 5종 | 완료 |
+| global/rag — RagQuery, RagChunk, RagChunkRetriever(인터페이스), SimpleRagChunkRetriever(구현체) | 완료 |
 | internal (frame 수집, 검사 AI 콜백, 공정 분석 콜백) | 완료 |
 
 ---

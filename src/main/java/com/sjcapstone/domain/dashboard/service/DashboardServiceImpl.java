@@ -1,5 +1,11 @@
 package com.sjcapstone.domain.dashboard.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sjcapstone.domain.analysis.dto.ProcessPatternDto;
+import com.sjcapstone.domain.analysis.entity.ProcessAnalysis;
+import com.sjcapstone.domain.analysis.entity.SeverityLevel;
+import com.sjcapstone.domain.analysis.repository.AnalysisRepository;
 import com.sjcapstone.domain.dashboard.dto.*;
 import com.sjcapstone.domain.dashboard.dto.projection.DailyDefectStatsProjection;
 import com.sjcapstone.domain.dashboard.dto.projection.LineDefectStatsProjection;
@@ -8,16 +14,19 @@ import com.sjcapstone.domain.inspection.repository.InspectionRepository;
 import com.sjcapstone.domain.line.entity.Line;
 import com.sjcapstone.domain.line.repository.LineRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -25,6 +34,8 @@ public class DashboardServiceImpl implements DashboardService {
 
     private final InspectionRepository inspectionRepository;
     private final LineRepository lineRepository;
+    private final AnalysisRepository analysisRepository;
+    private final ObjectMapper objectMapper;
 
     @Override
     public DashboardResponse getDashboard() {
@@ -111,12 +122,40 @@ public class DashboardServiceImpl implements DashboardService {
                 .completionRate(completionRate)
                 .build();
 
+        LatestAnalysisSummaryResponse latestAnalysis = buildLatestAnalysisSummary();
+
         return DashboardResponse.builder()
                 .summary(summary)
                 .defectRateTrend(defectRateTrend)
                 .actionSummary(actionSummary)
                 .lineDefectRates(lineDefectRates)
+                .latestAnalysis(latestAnalysis)
                 .lastUpdatedAt(LocalDateTime.now())
                 .build();
+    }
+
+    private LatestAnalysisSummaryResponse buildLatestAnalysisSummary() {
+        return analysisRepository.findTopByRagUsedTrueOrderByCreatedAtDesc()
+                .map(analysis -> {
+                    List<ProcessPatternDto> patterns = parsePatterns(analysis);
+                    int patternCount = patterns.size();
+                    SeverityLevel highest = patterns.stream()
+                            .map(ProcessPatternDto::getSeverity)
+                            .filter(s -> s != null)
+                            .min(Comparator.comparingInt(SeverityLevel::ordinal))
+                            .orElse(null);
+                    return LatestAnalysisSummaryResponse.from(analysis, patternCount, highest);
+                })
+                .orElse(LatestAnalysisSummaryResponse.none());
+    }
+
+    private List<ProcessPatternDto> parsePatterns(ProcessAnalysis analysis) {
+        if (analysis.getPatterns() == null) return List.of();
+        try {
+            return objectMapper.readValue(analysis.getPatterns(), new TypeReference<>() {});
+        } catch (Exception e) {
+            log.warn("대시보드 분석 패턴 파싱 실패 — analysisId={}: {}", analysis.getId(), e.getMessage());
+            return List.of();
+        }
     }
 }

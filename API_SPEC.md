@@ -522,15 +522,29 @@ GET /api/dashboard
   "lineDefectRates": [
     { "lineId": 1, "lineName": "A라인", "defectRate": 0.12 }
   ],
+  "latestAnalysis": {
+    "analysisId": 3,
+    "status": "DONE",
+    "fromDate": "2026-04-27",
+    "toDate": "2026-05-27",
+    "totalInspectionCount": 240,
+    "totalDefectCount": 36,
+    "patternCount": 3,
+    "highestSeverity": "HIGH",
+    "analyzedAt": "2026-05-27T09:00:00"
+  },
   "lastUpdatedAt": "2026-05-20T10:30:00"
 }
 ```
+> `latestAnalysis`는 `ragUsed=true`인 최신 공정 분석 결과 요약.  
+> 분석 이력이 없으면 `{ "analysisId": null, "status": null }` 반환.
 
 ---
 
-## 9. 공정 개선 분석 (Analysis)
+## 9. 공정 개선 분석 — 레거시 (Analysis)
 
-> 인증: JWT + ADMIN 권한 필요
+> 인증: JWT + ADMIN 권한 필요  
+> RAG 미적용, 단순 OpenAI 직접 호출 방식. 하위 호환 유지용.
 
 ### AI 공정 분석 시작
 ```
@@ -583,7 +597,137 @@ GET /api/analysis/{analysisId}
 
 ---
 
-## 10. 내부 시스템 API (Internal)
+## 10. AI 공정 개선 분석 — RAG 기반 (Process Analysis)
+
+> 인증: JWT + ADMIN 권한 필요  
+> RAG(Retrieval-Augmented Generation) 적용. SQL 집계 기반 청크 검색 → 관련 통계만 프롬프트에 삽입 → OpenAI 호출.  
+> `process_analyses` 테이블에 `ragUsed=true`로 저장. 기존 `/api/analysis/**`와 공존.
+
+### RAG 공정 분석 시작
+```
+POST /api/analysis/process/start
+```
+- Request Body (모두 선택):
+```json
+{
+  "fromDate": "2026-04-27",
+  "toDate": "2026-05-27",
+  "lineId": 1
+}
+```
+> `fromDate`, `toDate` 미입력 시 최근 30일 기본 적용.  
+> `lineId` 미입력 시 전체 라인 분석.
+
+- **동기 처리**: RAG 청크 검색 → OpenAI 호출 → 결과 저장 → 반환 (수 초~수십 초 소요)
+- Response:
+```json
+{
+  "analysisId": 3,
+  "status": "DONE",
+  "patterns": [
+    {
+      "patternId": 1,
+      "title": "A라인 야간 스크래치 급증",
+      "description": "최근 2주간 A라인 야간 교대조에서 스크래치 불량이 전체 불량의 60%를 차지",
+      "severity": "HIGH",
+      "relatedLine": "A라인",
+      "relatedTimeRange": "22:00~06:00",
+      "metric": "스크래치 비율 60%, 전주 대비 +25%p",
+      "evidenceSummary": "야간조 검사 120건 중 72건 스크래치"
+    }
+  ],
+  "recommendations": [
+    {
+      "priority": 1,
+      "title": "야간 작업 전 절삭 공구 점검",
+      "description": "야간조 작업 시작 전 공구 마모 상태 의무 점검",
+      "targetLine": "A라인",
+      "expectedEffect": "스크래치 불량률 40% 감소 예상",
+      "relatedPatternIds": [1]
+    }
+  ],
+  "metadata": {
+    "analysisBaseTime": "2026-05-27T09:00:00",
+    "fromDate": "2026-04-27",
+    "toDate": "2026-05-27",
+    "totalInspectionCount": 240,
+    "totalDefectCount": 36,
+    "modelName": "gpt-4o-mini",
+    "ragUsed": true
+  },
+  "requestedAt": "2026-05-27T09:00:00",
+  "analyzedAt": "2026-05-27T09:00:05",
+  "errorMessage": null
+}
+```
+
+---
+
+### RAG 분석 최신 결과 조회
+```
+GET /api/analysis/process/latest
+```
+- `ragUsed=true`인 가장 최근 분석 반환
+- 이력 없으면 `404 NOT_FOUND`
+
+---
+
+### RAG 분석 상세 조회
+```
+GET /api/analysis/process/{analysisId}
+```
+- `ragUsed=true`인 분석만 조회 가능 (레거시 analysisId 전달 시 `404`)
+
+---
+
+### RAG 분석 이력 목록 조회
+```
+GET /api/analysis/process/history?page=0&size=10
+```
+- `ragUsed=true`인 분석 목록, 최신순 정렬
+- Response:
+```json
+{
+  "content": [
+    {
+      "analysisId": 3,
+      "status": "DONE",
+      "fromDate": "2026-04-27",
+      "toDate": "2026-05-27",
+      "totalInspectionCount": 240,
+      "totalDefectCount": 36,
+      "patternCount": 3,
+      "modelName": "gpt-4o-mini",
+      "ragUsed": true,
+      "requestedAt": "2026-05-27T09:00:00",
+      "analyzedAt": "2026-05-27T09:00:05"
+    }
+  ],
+  "page": 0,
+  "size": 10,
+  "totalElements": 5,
+  "totalPages": 1,
+  "last": true
+}
+```
+
+---
+
+### RAG 청크 구성 (내부 동작)
+
+| 청크 타입 | 설명 | 관련성 점수 기준 |
+|---|---|---|
+| `LINE_STATS` | 라인별 불량률 집계 | `lineId` 일치 +10, 불량률 >15% +5, 불량 건수 많음 +4 |
+| `SHIFT_STATS` | 교대조별 불량률 집계 | 불량률 >15% +5, 불량 건수 많음 +4 |
+| `HOUR_STATS` | 시간대별 불량률 집계 | 불량률 >20% +5, 불량 건수 많음 +3 |
+| `DEFECT_TYPE_STATS` | 불량 유형별 집계 | 불량 건수 많음 +4 |
+| `WEEKLY_TREND` | 주간 추이 집계 | 최근 주 불량 증가 추세 +5 |
+
+> 상위 5개 청크만 프롬프트에 삽입 (기본값, `RAG_TOP_N=5`).
+
+---
+
+## 11. 내부 시스템 API (Internal)
 
 > 인증: `X-Service-Key: {서비스키}` 헤더  
 > 호출 주체: 카메라/엣지 디바이스, AI 분석 서버
